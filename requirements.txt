@@ -1,0 +1,10 @@
+numpy
+scipy
+tqdm
+tensorflow==2.1.0
+sklearn
+matplotlib
+seaborn
+pandas
+jupyter
+-e git+https://github.com/nicktfranklin/SEM2.git@master#egg=SEM2

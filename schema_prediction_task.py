@@ -27,6 +27,7 @@ from scipy.special import logsumexp
 from sem import sem_run_with_boundaries, SEM
 from sem.hrr import plate_formula, encode, decode, embed_gaussian
 from sem.utils import fast_mvnorm_diagonal_logprob, get_prior_scale, processify
+from no_split_sem import no_split_sem_run_with_boundaries, NoSplitSEM
 
 
 
@@ -340,7 +341,7 @@ def classify_verbs(results, y):
 
 def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, progress_bar=True,
     sem_progress_bar=False, block_only=False, interleaved_only=False, aggregator=np.min, run_mixed=False, 
-    debug=False, save_to_json=False, json_tag='', json_file_path='./'):
+    debug=False, save_to_json=False, json_tag='', json_file_path='./', no_split=False):
     """
     :param sem_kwargs: (dictionary)
     :param stories_kwargs: (dictionary) 
@@ -363,7 +364,7 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
 
 
     # create a function that takes in "blocked" or "interleaved" as an argument and runs a batch of trials
-    def run_condition(condition, batch=1):
+    def run_condition(condition, batch=1, no_split=False):
         """
         :param condition: (str), either 'blocked', 'interleaved', 'early', 'middle', or 'late'
         """
@@ -381,10 +382,16 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
 
         # run the model
         run_kwargs = dict(save_x_hat=True, progress_bar=sem_progress_bar, minimize_memory=True)
-        sem_model = SEM(**sem_kwargs)
+        # sem_model = SEM(**sem_kwargs)
         # sem_model.run_w_boundaries(x, **run_kwargs)
         # results = sem_model.results
-        results = sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
+        if not no_split:
+            results = sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
+        else:
+            sem_model = NoSplitSEM(**sem_kwargs)
+            sem_model.run_w_boundaries(x, **run_kwargs)
+            results = sem_model.results
+            # results = no_split_sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
         results.x_orig = np.concatenate(x)
 
         # create a decoder based on both the training stimuli from both experiments
@@ -531,7 +538,7 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
 
         for condition in conditions:
 
-            _res, _bound, _pred = run_condition(condition, kk)
+            _res, _bound, _pred = run_condition(condition, kk, no_split)
             results += _res
             boundaries += _bound
             prediction_err += _pred

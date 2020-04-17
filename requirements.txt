@@ -7,4 +7,5 @@ matplotlib
 seaborn
 pandas
 jupyter
+statsmodels
 -e git+https://github.com/nicktfranklin/SEM2.git@master#egg=SEM2

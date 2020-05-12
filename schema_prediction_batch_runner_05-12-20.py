@@ -110,7 +110,7 @@ def run_single_batch(batch_n, lr, n_epochs, log_alpha, log_lambda, mixed=False, 
     optimizer_kwargs['lr'] = lr # this relies on mutability to change the f_opts dictionary
 
     # run batch update or online training?
-    f_opt['batch_update'] = batch_update
+    f_opts['batch_update'] = batch_update
 
     json_tag = '_e{}_lr{}_n{}_d{}_logalfa_{}_loglmda_{}_batch_{}{}'.format(
         epsilon, lr, n_epochs, dropout, log_alpha, log_lambda, batch_n, tag)

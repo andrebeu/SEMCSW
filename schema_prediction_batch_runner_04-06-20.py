@@ -58,7 +58,7 @@ f_opts=dict(
 
 
 
-def make_random_queue(batch_n, lrs, n_epochs_, log_alphas, log_lambdas, mixed=False):
+def make_random_queue(batch_n, lrs, n_epochs_, log_alphas, log_lambdas, tag='', mixed=False):
     # go through these lists in a random order for better sampling
     parameter_tuples = []
     for lr in lrs:
@@ -79,10 +79,16 @@ def make_random_queue(batch_n, lrs, n_epochs_, log_alphas, log_lambdas, mixed=Fa
         # files = glob('./json_files/*{}*{}*{}*{}*{}*{}*{}*'.format(*args))
 
         args = [epsilon, lr, int(n_epochs), dropout, log_alpha, log_lambda, int(batch_n)]
-        file_string = './json_files/results*{}*{}*{}*{}*{}*{}*{}*'.format(*args)
+
+        json_tag = '_e{}_lr{}_n{}_d{}_logalfa_{}_loglmda_{}_batch_{}{}'.format(
+            epsilon, lr, int(n_epochs), dropout, log_alpha, log_lambda, batch_n, tag)
+        json_tag_mixed = '_e{}_lr{}_n{}_d{}_logalfa_{}_loglmda_{}_batch_{}{}_mixed'.format(
+            epsilon, lr, int(n_epochs), dropout, log_alpha, log_lambda, batch_n, tag)
+
+        file_string = './json_files/results{}.json'.format(json_tag)
         
         if mixed:
-            file_string += 'mixed*'
+            file_string = './json_files/results{}.json'.format(json_tag_mixed)
 
         files = glob(file_string)
 
@@ -143,60 +149,95 @@ if __name__ == "__main__":
         raise(Exception)
 
     mixed=False
+    no_split=True
 
-    def make_batch_runner_queue(parameters_queue, mixed=False, tag='', no_split=False):
-        
-        list_functions = []
-        
-        for lr, n_epochs, log_alpha, log_lambda in np.random.permutation(parameters_queue):
-            
-            def internal_func():
 
-                args = [batch_n, lr, int(n_epochs), log_alpha, log_lambda]
-                kw_args = dict(mixed=mixed, tag=tag, no_split=no_split)
-                
-                return run_single_batch(*args, **kw_args)
+    
+    # lrs = [0.002]
+    # n_epochs_ = [36, 44, 60]
+    # log_alphas = [0.0, -15.0, -25.0, -35.0]
+    # log_lambdas = [0.0, 20.0, 40.0, 60.0]
+    # parameters_queue = make_random_queue(batch_n, lrs, n_epochs_, log_alphas, log_lambdas, mixed=True)
+    # batch_runner_queue += make_batch_runner_queue(parameters_queue, mixed=True)
 
-            list_functions.append(internal_func)
-        
-        return list_functions
-
-    parameters_queue = []
-
-    lrs = [0.002]
-    n_epochs_ = [36, 44, 60]
-    log_alphas = [0.0, -15.0, -25.0, -35.0]
-    log_lambdas = [0.0, 20.0, 40.0, 60.0]
-    parameters_queue_mixed = make_random_queue(batch_n, lrs, n_epochs_, log_alphas, log_lambdas, mixed=True)
-    batch_runner_queue = make_batch_runner_queue(parameters_queue, mixed=True)
+    # # # let's look also at a completely different and unoverlapping portion of the parameter space
+    # lrs = [0.002]
+    # n_epochs_ = [36, 44, 60]
+    # log_alphas = [0.0, 75.0, 100.0, 150.0, 200.0, 250.0, 300.0]
+    # log_lambdas = [0.0, 2.5, 5.0, 10.0, 15.0, 20.0, 25.0, 35.0, 50.0]
+    # parameters_queue = make_random_queue(batch_n, lrs, n_epochs_, log_alphas, log_lambdas)
+    # batch_runner_queue += make_batch_runner_queue(parameters_queue)
 
     # # let's look also at a completely different and unoverlapping portion of the parameter space
-    lrs = [0.002]
-    n_epochs_ = [36, 44, 60]
-    log_alphas = [0.0, 75.0, 100.0, 150.0, 200.0, 250.0, 300.0]
-    log_lambdas = [0.0, 2.5, 5.0, 10.0, 15.0, 20.0, 25.0, 35.0, 50.0]
-    parameters_queue += make_random_queue(batch_n, lrs, n_epochs_, log_alphas, log_lambdas)
-    batch_runner_queue = make_batch_runner_queue(parameters_queue)
-
-    # let's look also at a completely different and unoverlapping portion of the parameter space
-    lrs = [0.00005, 0.0001, 0.0005, 0.002, 0.004, 0.008]
-    n_epochs_ = [4, 8, 12, 16, 20, 28, 36, 44, 60]
-    log_alphas = [-101]
-    log_lambdas = [101]
-    parameters_queue += make_random_queue(batch_n, lrs, n_epochs_, log_alphas, log_lambdas)
-    batch_runner_queue = make_batch_runner_queue(parameters_queue, tag='_no_split', no_split=True)
+    # lrs = [0.000005, 0.00001, 0.000025, 0.00005, 0.000075, 0.0001]
+    # n_epochs_ = [1, 2, 4, 8, 12, 16, 20, 28, 36, 44, 52, 60, 66, 72]
+    # log_alphas = [-301]
+    # log_lambdas = [301]
+    # parameters_queue = make_random_queue(batch_n, lrs, n_epochs_, log_alphas, log_lambdas, tag='_no_split')
+    # tag='_no_split'
+    # mixed=False
+    # no_split=True
+    # # batch_runner_queue += make_batch_runner_queue(parameters_queue, tag='_no_split', no_split=True)
     
+    # # t = 0
+    # # n = len(batch_runner_queue)
+    # # for batch_runner in np.random.permutation(batch_runner_queue):
+    # #     print("Running simulation {} of {}".format(t, n))
+    # #     batch_runner()
+    # #     t += 1
+
+
     t = 0
-    n = len(batch_runner_queue)
-    for batch_runner in np.random.permutation(batch_runner_queue):
-        print("Running simulation {} of {}".format(t, n))
-        batch_runner()
-        t += 1
+    # n = len(parameters_queue)
+    # for lr, n_epochs, log_alpha, log_lambda in np.random.permutation(parameters_queue):
+    #     print("Running simulation {} of {}".format(t, n))
+    #     run_single_batch(batch_n, lr, int(n_epochs), log_alpha, log_lambda, mixed=mixed, no_split=no_split, tag=tag)
+    #     t += 1
 
 
+    # # repeat, but for a second batch
+    # parameters_queue = make_random_queue(batch_n + 4, lrs, n_epochs_, log_alphas, log_lambdas, tag='_no_split')
     # t = 0
     # n = len(parameters_queue)
     # for lr, n_epochs, log_alpha, log_lambda in np.random.permutation(parameters_queue):
     #     print("Running simulation {} of {}".format(t, n))
-    #     run_single_batch(batch_n, lr, int(n_epochs), log_alpha, log_lambda, mixed=mixed)
+    #     run_single_batch(batch_n + 4, lr, int(n_epochs), log_alpha, log_lambda, mixed=mixed, no_split=no_split, tag=tag)
     #     t += 1
+
+    # # repeat, but for a third batch
+    # parameters_queue = make_random_queue(batch_n + 8, lrs, n_epochs_, log_alphas, log_lambdas)
+    # t = 0
+    # n = len(parameters_queue)
+    # for lr, n_epochs, log_alpha, log_lambda in np.random.permutation(parameters_queue):
+    #     print("Running simulation {} of {}".format(t, n))
+    #     run_single_batch(batch_n + 8, lr, int(n_epochs), log_alpha, log_lambda, mixed=mixed, no_split=no_split, tag=tag)
+    #     t += 1
+
+    # turn splitting back on
+    lrs = [0.000025, 0.00005, 0.000075, 0.0001, 0.0005]
+    n_epochs_ = [28, 36, 44, 52, 60, 72]
+    log_alphas = [0.0, 5.0, 7.5, 10.0, 12.5, 15.0, 20.0]
+    log_lambdas = [0.0, 5.0, 7.5, 10.0, 12.5, 15.0]
+    parameters_queue = make_random_queue(batch_n, lrs, n_epochs_, log_alphas, log_lambdas)
+    tag=''
+    mixed=False
+    no_split=False
+    t = 0
+    n = len(parameters_queue)
+    for lr, n_epochs, log_alpha, log_lambda in np.random.permutation(parameters_queue):
+        print("Running simulation {} of {}".format(t, n))
+        run_single_batch(batch_n, lr, int(n_epochs), log_alpha, log_lambda, mixed=mixed, no_split=no_split, tag=tag)
+        t += 1
+
+    # repeat, but for a second batch
+    parameters_queue = make_random_queue(batch_n + 4, lrs, n_epochs_, log_alphas, log_lambdas)
+    tag=''
+    mixed=False
+    no_split=False
+    t = 0
+    n = len(parameters_queue)
+    for lr, n_epochs, log_alpha, log_lambda in np.random.permutation(parameters_queue):
+        print("Running simulation {} of {}".format(t, n))
+        run_single_batch(batch_n + 4, lr, int(n_epochs), log_alpha, log_lambda, mixed=mixed, no_split=no_split, tag=tag)
+        t += 1
+    

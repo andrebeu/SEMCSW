@@ -154,17 +154,22 @@ if __name__ == "__main__":
         raise(Exception)
 
     mixed=False
-    no_split=True
+    no_split=False
 
-    lrs = [1e-5, 5e-5, 1e-4, 5e-4, 1e-3, 5e-3]
-    n_epochs_ = [1, 2, 4, 8, 16, 32, 64, 128]
-    log_alphas = [0.0]
-    log_lambdas = [0.0]
+    lrs = [1e-3]
+    n_epochs_ = [50]
+    log_alphas = [-128, -64, -32, -16, -8, -4, -2, -1, 0, 1, 2, 4, 8, 16, 32, 64, 128]
+    log_lambdas = [-128, -64, -32, -16, -8, -4, -2, -1, 0, 1, 2, 4, 8, 16, 32, 64, 128]
 
-    # with splitting, batch training
+    # lrs = [1e-5]
+    # n_epochs_ = [1]
+    # log_alphas = [0.0]
+    # log_lambdas = [0.0]
 
-    parameters_queue = make_random_queue(batch_n, lrs, n_epochs_, log_alphas, log_lambdas)
-    tag=''
+    # Online training only
+    tag='_online'
+    no_split=False
+    parameters_queue = make_random_queue(batch_n, lrs, n_epochs_, log_alphas, log_lambdas, tag=tag, mixed=mixed)
     t = 0
     n = len(parameters_queue)
     for lr, n_epochs, log_alpha, log_lambda in np.random.permutation(parameters_queue):
@@ -173,15 +178,44 @@ if __name__ == "__main__":
              no_split=no_split, tag=tag)
         t += 1
 
-    # with splitting, online training
 
-    parameters_queue = make_random_queue(batch_n, lrs, n_epochs_, log_alphas, log_lambdas)
-    tag='_online_training'
-    t = 0
-    n = len(parameters_queue)
-    for lr, n_epochs, log_alpha, log_lambda in np.random.permutation(parameters_queue):
-        print("Running simulation {} of {}".format(t, n))
-        run_single_batch(batch_n, lr, int(n_epochs), log_alpha, log_lambda, mixed=mixed,
-             no_split=no_split, tag=tag, batch_update=False)
-        t += 1
+    # # here, we'll just use a single parameter queue and assume run everything together
+    
+    # tag='_online'
+    # parameters_queue = make_random_queue(batch_n, lrs, n_epochs_, log_alphas, log_lambdas, tag=tag, mixed=mixed)
+    # t = 0
+    # n = len(parameters_queue)
+    # for lr, n_epochs, log_alpha, log_lambda in np.random.permutation(parameters_queue):
+        
+    #     print("Running simulations {} of {}".format(t, n))
+
+    #     #  batch training
+    #     no_split=False
+    #     tag=''
+    #     n = len(parameters_queue)
+    #     run_single_batch(batch_n, lr, int(n_epochs), log_alpha, log_lambda, mixed=mixed,
+    #         no_split=no_split, tag=tag)
+
+
+    #     # no splitting, batch training
+    #     no_split=True
+    #     tag='_nosplit'
+    #     n = len(parameters_queue)
+    #     run_single_batch(batch_n, lr, int(n_epochs), log_alpha, log_lambda, mixed=mixed,
+    #         no_split=no_split, tag=tag)
+
+    #     # with splitting, online training   
+    #     no_split=False
+    #     tag='_online'
+    #     run_single_batch(batch_n, lr, int(n_epochs), log_alpha, log_lambda, mixed=mixed,
+    #         no_split=no_split, tag=tag, batch_update=False)
+
+
+
+    #     # with splitting, online training   
+    #     no_split=True
+    #     tag='_online_nosplit'
+    #     run_single_batch(batch_n, lr, int(n_epochs), log_alpha, log_lambda, mixed=mixed,
+    #         no_split=no_split, tag=tag, batch_update=False)
   
+    #     t += 1

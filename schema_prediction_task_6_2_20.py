@@ -84,16 +84,16 @@ def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embeddin
 
     The nodes in the task graps are listed as integers with the 
     following correspondance:
-        Begin:      0    
-        LocNodeB:   1
-        LocNodeC:   2
-        Node11:     3
-        Node12:     4
-        Node21:     5
-        Node22:     6
-        Node31:     7
-        Node32:     8
-        End:        9
+        LocNodeB:   0
+        LocNodeC:   1
+        Node11:     2
+        Node12:     3
+        Node21:     4
+        Node22:     5
+        Node31:     6
+        Node32:     7
+
+        in this version, we will not include the BEGIN and END notes
 
     Note that each feature is unique to each scene and there is no shared 
     correlation structure for these features.

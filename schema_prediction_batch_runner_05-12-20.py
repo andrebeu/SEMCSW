@@ -40,14 +40,16 @@ dropout           = 0.0
 l2_regularization = 0.0
 n_epochs          = 13
 batch_size        = 25
-lr                = 0.01
-epsilon           = 1e-5
 log_alpha         = 0.0
 log_lambda        = 0.0
 
-optimizer_kwargs = dict(
-    lr=lr, beta_1=0.9, beta_2=0.999, epsilon=epsilon, amsgrad=False
-)
+beta_1            = 0.9
+beta_2            = 0.999
+lr                = 0.001
+epsilon           = 1e-8
+
+optimizer_kwargs = dict(lr=lr, beta_1=beta_1, beta_2=beta_2,
+    epsilon=epsilon, amsgrad=False)
 
 f_opts=dict(
     dropout=dropout,
@@ -57,8 +59,7 @@ f_opts=dict(
     optimizer_kwargs=optimizer_kwargs)
 
 
-
-def make_random_queue(batch_n, lrs, n_epochs_, log_alphas, log_lambdas, tag='', mixed=False):
+def make_random_queue(batch_n, lrs, n_epochs_, log_alphas, log_lambdas, tag='', mixed=False, epsilon=1e-5):
     # go through these lists in a random order for better sampling
     parameter_tuples = []
     for lr in lrs:
@@ -157,9 +158,13 @@ if __name__ == "__main__":
     no_split=False
 
     lrs = [1e-3]
-    n_epochs_ = [50]
-    log_alphas = [-128, -64, -32, -16, -8, -4, -2, -1, 0, 1, 2, 4, 8, 16, 32, 64, 128]
-    log_lambdas = [-128, -64, -32, -16, -8, -4, -2, -1, 0, 1, 2, 4, 8, 16, 32, 64, 128]
+    n_epochs_ = [16, 32, 64, 128]
+    # log_alphas = [-64, -32, -16, -8, -4, -2, -1, 0, 1, 2, 4, 8, 16]
+    # log_lambdas = [0, 1, 2, 4, 8, 16, 32, 64, 128, 256]
+    log_alphas = [0]
+    log_lambdas = [0]
+
+    
 
     # lrs = [1e-5]
     # n_epochs_ = [1]
@@ -167,15 +172,16 @@ if __name__ == "__main__":
     # log_lambdas = [0.0]
 
     # Online training only
-    tag='_online'
-    no_split=False
-    parameters_queue = make_random_queue(batch_n, lrs, n_epochs_, log_alphas, log_lambdas, tag=tag, mixed=mixed)
+    tag='_online_nosplit'
+    no_split=True
+    batch_update = False
+    parameters_queue = make_random_queue(batch_n, lrs, n_epochs_, log_alphas, log_lambdas, tag=tag, mixed=mixed, epsilon=epsilon)
     t = 0
     n = len(parameters_queue)
     for lr, n_epochs, log_alpha, log_lambda in np.random.permutation(parameters_queue):
         print("Running simulation {} of {}".format(t, n))
         run_single_batch(batch_n, lr, int(n_epochs), log_alpha, log_lambda, mixed=mixed,
-             no_split=no_split, tag=tag)
+             no_split=no_split, tag=tag, batch_update=batch_update)
         t += 1
 
 

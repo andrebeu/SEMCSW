@@ -10,21 +10,41 @@ run(){
 }
 
 # Server A
-servername="ec2-18-218-149-157.us-east-2.compute.amazonaws.com"
+servername="ec2-3-20-206-209.us-east-2.compute.amazonaws.com"
 batch_n=0
 run $servername $batch_n
 
 # Server B
-servername="ec2-3-15-169-104.us-east-2.compute.amazonaws.com"
+servername="ec2-3-18-107-245.us-east-2.compute.amazonaws.com"
 batch_n=1
 run $servername $batch_n
 
 # Server C
-servername="ec2-18-216-193-161.us-east-2.compute.amazonaws.com"
+servername="ec2-18-191-7-223.us-east-2.compute.amazonaws.com"
 batch_n=2
 run $servername $batch_n
 
 # Server D
-servername="ec2-18-216-81-81.us-east-2.compute.amazonaws.com"
+servername="ec2-18-222-239-223.us-east-2.compute.amazonaws.com"
+batch_n=3
+run $servername $batch_n
+
+# Server E
+servername="ec2-18-217-250-118.us-east-2.compute.amazonaws.com"
+batch_n=0
+run $servername $batch_n
+
+# Server F
+servername="ec2-18-216-81-227.us-east-2.compute.amazonaws.com"
+batch_n=1
+run $servername $batch_n
+
+# Server G
+servername="ec2-18-222-187-9.us-east-2.compute.amazonaws.com"
+batch_n=2
+run $servername $batch_n
+
+# Server H
+servername="ec2-18-217-48-5.us-east-2.compute.amazonaws.com"
 batch_n=3
 run $servername $batch_n

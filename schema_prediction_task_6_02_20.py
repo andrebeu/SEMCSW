@@ -285,18 +285,6 @@ def count_repeats(e_hat):
     return repeat_list
 
 
-# # we define this function seperately to faciliate putting it in an a seperate process
-# # this, hopefully, clears up memory
-# @processify
-# def run_return_results(x, sem_kwargs, aggregator=np.sum, sem_progress_bar=True):
-#     sem_model = SEM(**sem_kwargs)
-#     sem_model.run_w_boundaries(x, save_x_hat=True, progress_bar=sem_progress_bar,
-#         minimize_memory=True, aggregator=aggregator)
-
-#     # cache the original embedded vectors
-#     sem_model.results.x_orig = np.concatenate(x)
-#     return sem_model.results
-
 def classify_verbs(results, y):
     # create a decoder based on both the training stimuli from both experiments
     
@@ -505,6 +493,9 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
 
         if not no_split:
             results = sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
+            # sem_model = SEM(**sem_kwargs)
+            # sem_model.run_w_boundaries(x, save_x_hat=True, progress_bar=sem_progress_bar)
+            # results = sem_model
         else:
             results = no_split_sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
         results.x_orig = np.concatenate(x)

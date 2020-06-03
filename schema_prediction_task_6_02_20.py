@@ -379,7 +379,7 @@ def score_results(results, e, y):
         'pe (probes)': float(np.mean(pes[pred_trials])),
         'verb decoder Accuracy': float(np.mean(decoding_acc[pred_trials])),
         'verb decoder Accuracy Prob': float(np.mean(decoding_prob_corr[pred_trials])),
-        'Prediction Task Accuracy': float(np.mean(prob_corr_2afc[pred_trials & pred_trials])),
+        'verb 2 AFC decoder Prob': float(np.mean(prob_corr_2afc[pred_trials & pred_trials])),
     }]
     results.append({
         'Trials': 'Training',
@@ -389,7 +389,7 @@ def score_results(results, e, y):
         'pe (probes)': float(np.mean(pes[pred_trials & (is_test == False)])),
         'verb decoder Accuracy': float(np.mean(decoding_acc[pred_trials & (is_test == False)])),
         'verb decoder Accuracy Prob': float(np.mean(decoding_prob_corr[pred_trials & (is_test == False)])),
-        'Prediction Task Accuracy': float(np.mean(prob_corr_2afc[pred_trials & (is_test == False)])),
+        'verb 2 AFC decoder Prob': float(np.mean(prob_corr_2afc[pred_trials & (is_test == False)])),
     })
     results.append({
         'Trials': 'Test',
@@ -399,7 +399,7 @@ def score_results(results, e, y):
         'pe (probes)': float(np.mean(pes[pred_trials & is_test])),
         'verb decoder Accuracy': float(np.mean(decoding_acc[pred_trials & is_test])),
         'verb decoder Accuracy Prob': float(np.mean(decoding_prob_corr[pred_trials & is_test])),
-        'Prediction Task Accuracy': float(np.mean(prob_corr_2afc[pred_trials & is_test])),
+        'verb 2 AFC decoder Prob': float(np.mean(prob_corr_2afc[pred_trials & is_test])),
         'cluster re-use': float(np.mean([c in set(e_hat[:n_train]) for c in e_hat[n_train:]])),
     })
 
@@ -438,9 +438,9 @@ def score_results(results, e, y):
                     'Schema True': int(e[t]),
                     'Schema Repeats': schema_repeats[t],
                     'Schema Repeats (Inferred)': schema_reps_inferred[t],
-                    'verb Accuracy': float(decoding_acc[scence_counter]),
-                    'verb Accuracy Prob': float(decoding_prob_corr[scence_counter]),
-                    'verb 2 AFC Prob': float(prob_corr_2afc[scence_counter]),
+                    'verb decoder Accuracy': float(decoding_acc[scence_counter]),
+                    'verb decoder Accuracy Prob': float(decoding_prob_corr[scence_counter]),
+                    'verb 2 AFC decoder Prob': float(prob_corr_2afc[scence_counter]),
                 }
             )
             scence_counter += 1
@@ -542,15 +542,13 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
 
         for condition in conditions:
 
-            results = run_condition(condition, kk, no_split)
-
-            _res, _bound, _pred = score_results(results, e, y)
+            _res, _bound, _pred = run_condition(condition, kk, no_split)
 
             # add batch number and condition to all of the results
             def add_batch_cond(json_data):
-                for ii in len(json_data):
+                for ii in range(len(json_data)):
                     json_data[ii]['batch'] = kk
-                    json_data[ii]['condition'] = condition
+                    json_data[ii]['Condition'] = condition
                 return json_data
 
             _res = add_batch_cond(_res)

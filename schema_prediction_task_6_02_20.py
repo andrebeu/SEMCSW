@@ -84,16 +84,16 @@ def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embeddin
 
     The nodes in the task graps are listed as integers with the 
     following correspondance:
-        LocNodeB:   0
-        LocNodeC:   1
-        Node11:     2
-        Node12:     3
-        Node21:     4
-        Node22:     5
-        Node31:     6
-        Node32:     7
-
-        in this version, we will not include the BEGIN and END notes
+        Begin:      0    
+        LocNodeB:   1
+        LocNodeC:   2
+        Node11:     3
+        Node12:     4
+        Node21:     5
+        Node22:     6
+        Node31:     7
+        Node32:     8
+        End:        9
 
     Note that each feature is unique to each scene and there is no shared 
     correlation structure for these features.
@@ -345,6 +345,117 @@ def classify_verbs(results, y):
     return decoding_acc, decoding_prob_corr, prob_corr_2afc
 
 
+def score_results(results, e, y):
+    """ function that takes in the completed SEM results object, plus vector of 
+    true nodes and create prelimiarly analyses
+    """
+
+    # hard code these for now
+    n_trials = 200
+    n_train  = 160
+    n_test   = 40
+
+    # create a decoder based on both the training stimuli from both experiments
+    decoding_acc, decoding_prob_corr, prob_corr_2afc = classify_verbs(results, y)
+    
+    ###### model scoring and analyses ##### 
+    e_hat = results.e_hat
+    schema_repeats = count_repeats(e)
+    schema_reps_inferred = count_repeats(e_hat)
+
+    # # calculate prediction error (max distance ~ 1.0)
+    pes = np.linalg.norm(results.x_hat - results.x_orig, axis=1) / np.sqrt(2)
+
+    # # these are the relevant prediction trials in the test phase
+    t = np.array([t0 for _ in range(n_trials) for t0 in range(6)])
+    pred_trials = ((t == 3) | (t == 4))
+    is_test = np.array([t0 >= n_train for t0 in range(n_trials) for _ in range(6)])
+
+    results = [{
+        'Trials': 'All',
+        'adjRand': float(adjusted_rand_score(e_hat, e)),
+        'nClusters': len(set(e_hat)), 
+        'pe': float(np.mean(pes)),
+        'pe (probes)': float(np.mean(pes[pred_trials])),
+        'verb decoder Accuracy': float(np.mean(decoding_acc[pred_trials])),
+        'verb decoder Accuracy Prob': float(np.mean(decoding_prob_corr[pred_trials])),
+        'Prediction Task Accuracy': float(np.mean(prob_corr_2afc[pred_trials & pred_trials])),
+    }]
+    results.append({
+        'Trials': 'Training',
+        'adjRand': float(adjusted_rand_score(e_hat[:n_train], e[:n_train])),
+        'nClusters': len(set(e_hat[:n_train])), 
+        'pe': float(np.mean(pes[is_test == False])),
+        'pe (probes)': float(np.mean(pes[pred_trials & (is_test == False)])),
+        'verb decoder Accuracy': float(np.mean(decoding_acc[pred_trials & (is_test == False)])),
+        'verb decoder Accuracy Prob': float(np.mean(decoding_prob_corr[pred_trials & (is_test == False)])),
+        'Prediction Task Accuracy': float(np.mean(prob_corr_2afc[pred_trials & (is_test == False)])),
+    })
+    results.append({
+        'Trials': 'Test',
+        'adjRand': float(adjusted_rand_score(e_hat[n_train:], e[n_train:])),
+        'nClusters': len(set(e_hat[n_train:])), 
+        'pe': float(np.mean(pes[is_test])),
+        'pe (probes)': float(np.mean(pes[pred_trials & is_test])),
+        'verb decoder Accuracy': float(np.mean(decoding_acc[pred_trials & is_test])),
+        'verb decoder Accuracy Prob': float(np.mean(decoding_prob_corr[pred_trials & is_test])),
+        'Prediction Task Accuracy': float(np.mean(prob_corr_2afc[pred_trials & is_test])),
+        'cluster re-use': float(np.mean([c in set(e_hat[:n_train]) for c in e_hat[n_train:]])),
+    })
+
+    # loop through these measure to create a memory-efficient list of dictionaries
+    # (as opposed to a memory-inefficient list of pandas DataFrames)
+    _bounds_vec = get_boundaries(e_hat)
+    _new_event_prob = get_new_event_prob(e_hat)
+    _total_n_events = get_total_n_events(e_hat)
+    scence_counter = 0
+    boundaries = []
+    prediction_err = []
+    for t in range(n_trials):
+        boundaries.append(
+            {
+                'Trials': ['Training', 'Test'][t >= n_train],
+                # 'Condition': condition, 
+                # 'batch': batch,
+                'Boundaries': int(_bounds_vec[t]),
+                't': t,
+                'Schema Repeats': schema_repeats[t],
+                'New Event': int(_new_event_prob[t]),
+                'Total N Events': int(_total_n_events[t]),
+                'e_hat': int(e_hat[t]),
+            }
+        )
+
+        for kk in range(6):
+            prediction_err.append(
+                {
+                    'Story': t,
+                    # 'Condition': condition,
+                    # 'batch': batch,
+                    't': kk,
+                    'Trials': ['Training', 'Test'][t >= n_train],
+                    'pe': float(pes[scence_counter]),
+                    'Schema True': int(e[t]),
+                    'Schema Repeats': schema_repeats[t],
+                    'Schema Repeats (Inferred)': schema_reps_inferred[t],
+                    'verb Accuracy': float(decoding_acc[scence_counter]),
+                    'verb Accuracy Prob': float(decoding_prob_corr[scence_counter]),
+                    'verb 2 AFC Prob': float(prob_corr_2afc[scence_counter]),
+                }
+            )
+            scence_counter += 1
+
+
+    # Delete SEM, clear all local variables
+    x, y, e = None, None, None, 
+    e_hat, schema_repeats, schema_reps_inferred, pes = None, None, None, None
+    t, pred_trials, decoding_acc = None, None, None
+    decoding_prob_corr, decoding_acc, prob_corr_2afc = None, None, None
+
+    # return results!
+    return results, boundaries, prediction_err
+
+
 def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, progress_bar=True,
     sem_progress_bar=False, block_only=False, interleaved_only=False, aggregator=np.sum, run_mixed=False, 
     debug=False, save_to_json=False, json_tag='', json_file_path='./', no_split=False, normalize=False):
@@ -390,131 +501,15 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
 
 
         # run the model
-        run_kwargs = dict(save_x_hat=True, progress_bar=sem_progress_bar, minimize_memory=True)
-        # sem_model = SEM(**sem_kwargs)
-        # sem_model.run_w_boundaries(x, **run_kwargs)
-        # results = sem_model.results
+        run_kwargs = dict(save_x_hat=True, progress_bar=sem_progress_bar, minimize_memory=False)
+
         if not no_split:
             results = sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
         else:
-            # sem_model = NoSplitSEM(**sem_kwargs)
-            # sem_model.run_w_boundaries(x, **run_kwargs)
-            # results = sem_model.results
             results = no_split_sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
         results.x_orig = np.concatenate(x)
-
-        # create a decoder based on both the training stimuli from both experiments
-        decoding_acc, decoding_prob_corr, prob_corr_2afc = classify_verbs(results, y)
-
-
-        ###### model scoring and analyses ##### 
-        e_hat = results.e_hat
-        schema_repeats = count_repeats(e)
-        schema_reps_inferred = count_repeats(e_hat)
-
-        # # calculate prediction error (max distance ~ 1.0)
-        pes = np.linalg.norm(results.x_hat - results.x_orig, axis=1) / np.sqrt(2)
-
-        # # these are the relevant prediction trials in the test phase
-        t = np.array([t0 for _ in range(n_trials) for t0 in range(6)])
-        pred_trials = ((t == 3) | (t == 4))
-        is_test = np.array([t0 >= n_train for t0 in range(n_trials) for _ in range(6)])
-
-        results = [{
-            'Trials': 'All',
-            'Condition': condition,
-            'batch': batch,
-            'adjRand': float(adjusted_rand_score(e_hat, e)),
-            'nClusters': len(set(e_hat)), 
-            'pe': float(np.mean(pes)),
-            'verb Accuracy': float(np.mean(decoding_acc)),
-            'verb Accuracy Prob': float(np.mean(decoding_prob_corr)),
-        }]
-        if not debug:
-            results.append({
-                'Trials': 'Training',
-                'Condition': condition,
-                'batch': batch,
-                'adjRand': float(adjusted_rand_score(e_hat[:n_train], e[:n_train])),
-                'nClusters': len(set(e_hat[:n_train])), 
-                'pe': float(np.mean(pes[:6 * n_train])),
-                'verb Accuracy': float(np.mean(decoding_acc[:6 * n_train])),
-                'verb Accuracy Prob': float(np.mean(decoding_prob_corr[:6 * n_train])),
-                'verb 2 AFC Prob': float(np.mean(prob_corr_2afc[:6 * n_train])),
-            })
-            results.append({
-                'Trials': 'Test',
-                'Condition': condition,
-                'batch': batch,
-                'adjRand': float(adjusted_rand_score(e_hat[n_train:], e[n_train:])),
-                'nClusters': len(set(e_hat[n_train:])), 
-                'pe': float(np.mean(pes[6 * n_train:])),
-                'verb Accuracy': float(np.mean(decoding_acc[6 * n_train:])),
-                'verb Accuracy Prob': float(np.mean(decoding_prob_corr[6 * n_train:])),
-                'verb 2 AFC Prob': float(np.mean(prob_corr_2afc[6 * n_train:])),
-                'cluster re-use': float(np.mean([c in set(e_hat[:n_train]) for c in e_hat[n_train:]])),
-            })
-            results.append({
-                'Trials': 'Probes',
-                'Condition': condition,
-                'batch': batch,
-                'pe': float(np.mean(pes[pred_trials & is_test])),
-                'verb Accuracy': float(np.mean(decoding_acc[pred_trials & is_test])),
-                'verb Accuracy Prob': float(np.mean(decoding_prob_corr[pred_trials & is_test])),
-                'verb 2 AFC Prob': float(np.mean(prob_corr_2afc[pred_trials & is_test])),
-            })
-
-        # loop through these measure to create a memory-efficient list of dictionaries
-        # (as opposed to a memory-inefficient list of pandas DataFrames)
-        _bounds_vec = get_boundaries(e_hat)
-        _new_event_prob = get_new_event_prob(e_hat)
-        _total_n_events = get_total_n_events(e_hat)
-        scence_counter = 0
-        boundaries = []
-        prediction_err = []
-        for t in range(n_trials):
-            boundaries.append(
-                {
-                    'Trials': ['Training', 'Test'][t >= n_train],
-                    'Condition': condition, 
-                    'batch': batch,
-                    'Boundaries': int(_bounds_vec[t]),
-                    't': t,
-                    'Schema Repeats': schema_repeats[t],
-                    'New Event': int(_new_event_prob[t]),
-                    'Total N Events': int(_total_n_events[t]),
-                    'e_hat': int(e_hat[t]),
-                }
-            )
-
-            for kk in range(6):
-                prediction_err.append(
-                    {
-                        'Story': t,
-                        'Condition': condition,
-                        'batch': batch,
-                        't': kk,
-                        'Trials': ['Training', 'Test'][t >= n_train],
-                        'pe': float(pes[scence_counter]),
-                        'Schema True': int(e[t]),
-                        'Schema Repeats': schema_repeats[t],
-                        'Schema Repeats (Inferred)': schema_reps_inferred[t],
-                        'verb Accuracy': float(decoding_acc[scence_counter]),
-                        'verb Accuracy Prob': float(decoding_prob_corr[scence_counter]),
-                        'verb 2 AFC Prob': float(prob_corr_2afc[scence_counter]),
-                    }
-                )
-                scence_counter += 1
-
-
-        # Delete SEM, clear all local variables
-        x, y, e = None, None, None, 
-        e_hat, schema_repeats, schema_reps_inferred, pes = None, None, None, None
-        t, pred_trials, decoding_acc = None, None, None
-        decoding_prob_corr, decoding_acc, prob_corr_2afc = None, None, None
-
-        # return results!
-        return results, boundaries, prediction_err
+        
+        return score_results(results, e, y)
 
     results = []
     boundaries = []
@@ -547,7 +542,21 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
 
         for condition in conditions:
 
-            _res, _bound, _pred = run_condition(condition, kk, no_split)
+            results = run_condition(condition, kk, no_split)
+
+            _res, _bound, _pred = score_results(results, e, y)
+
+            # add batch number and condition to all of the results
+            def add_batch_cond(json_data):
+                for ii in len(json_data):
+                    json_data[ii]['batch'] = kk
+                    json_data[ii]['condition'] = condition
+                return json_data
+
+            _res = add_batch_cond(_res)
+            _bound = add_batch_cond(_bound)
+            _pred = add_batch_cond(_pred)
+
             results += _res
             boundaries += _bound
             prediction_err += _pred

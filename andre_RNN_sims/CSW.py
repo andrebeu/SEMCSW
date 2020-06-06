@@ -33,7 +33,7 @@ class CSWNet(tr.nn.Module):
 class CSWTask():
 
   def __init__(self,graph_pr):
-    self.end_node = 9
+    self.end_node = 7
     self.fillerL = [self.end_node+1]
     self.graph = self.get_graph(graph_pr)
 
@@ -49,10 +49,8 @@ class CSWTask():
       2:{3:s,4:r},
       3:{5:r,6:s},
       4:{5:s,6:r},
-      5:{7:r,8:s},
-      6:{7:s,8:r},
-      7:{9:1.0},
-      8:{9:1.0}
+      5:{7:1.0},
+      6:{7:1.0},
     }
     return graph
 

@@ -6,26 +6,34 @@ softmax = lambda ulog: tr.softmax(ulog,-1)
 
 class CSWNet(tr.nn.Module):
 
-  def __init__(self,stsize,seed):
+  def __init__(self,stsize,seed,cell='gru'):
     super().__init__()
     tr.manual_seed(seed)
     self.seed = seed
     self.stsize = stsize
     self.smdim = 12
     self.input_embed = tr.nn.Embedding(self.smdim,self.stsize)
-    self.lstm = tr.nn.LSTMCell(self.stsize,self.stsize)
-    self.init_lstm = tr.nn.Parameter(tr.rand(2,1,self.stsize),requires_grad=True)
+    self.cell = cell
+    if self.cell=='lstm':
+      self.rnn = tr.nn.LSTMCell(self.stsize,self.stsize)
+    elif self.cell=='gru':
+      self.rnn = tr.nn.GRUCell(self.stsize,self.stsize)
+    self.init_rnn = tr.nn.Parameter(tr.rand(2,1,self.stsize),requires_grad=True)
     self.ff_hid2ulog = tr.nn.Linear(self.stsize,self.smdim,bias=False)
+    print(self.cell)
     return None
 
   def forward(self,state_int):
     ''' state_int contains ints [time,1] '''
     state_emb = self.input_embed(state_int)
-    h_lstm,c_lstm = self.init_lstm
+    h_rnn,c_rnn = self.init_rnn
     outputs = -tr.ones(len(state_emb),self.stsize)
     for tstep in range(len(state_emb)):
-      h_lstm,c_lstm = self.lstm(state_emb[tstep],(h_lstm,c_lstm))
-      outputs[tstep] = h_lstm
+      if self.cell=='lstm':
+        h_rnn,c_rnn = self.rnn(state_emb[tstep],(h_rnn,c_rnn))
+      elif self.cell=='gru':
+        h_rnn = self.rnn(state_emb[tstep],h_rnn)
+      outputs[tstep] = h_rnn
     outputs = self.ff_hid2ulog(outputs)
     return outputs
 

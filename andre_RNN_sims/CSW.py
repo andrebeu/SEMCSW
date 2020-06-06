@@ -159,9 +159,9 @@ class CSWTask():
       Y = [[[id,st(t+1),f1(t+1)],],]
       shape: (samples,depth,len)
     """
-    path = np.insert(path,0,filler_id)
-    X = path[0:-2]
-    Y = path[1:-1]
+    path = np.insert(path,1,filler_id)
+    X = path[0:-1]
+    Y = path[1:]
     X = np.vstack([X]).transpose()
     Y = np.vstack([Y]).transpose()
     # X = tr.Tensor(X).unsqueeze(1)

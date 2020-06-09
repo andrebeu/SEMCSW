@@ -155,7 +155,7 @@ if __name__ == "__main__":
         raise(Exception)
 
     mixed=False
-    no_split=False
+    no_split=True
 
     lrs = [1e-3]
     n_epochs_ = [16, 32, 64, 128]

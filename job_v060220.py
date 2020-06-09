@@ -86,7 +86,6 @@ def parse_args(args):
     log_lambda=0.0, n_hidden=10, epsilon=1e-5, no_split=False,
     batch_n=0, LSTM=False, batch_update=True)
 
-
     for arg in args:
         k = arg.split("=")[0]
         v = arg.split("=")[1]
@@ -97,8 +96,6 @@ def parse_args(args):
             main_kwargs[k] = v
         else:
             print("Parameter: {} not found!".format(k))
-             
-
     main_kwargs['n_epochs']     = int(main_kwargs['n_epochs'])
     main_kwargs['batch_size']   = int(main_kwargs['batch_size'])
     main_kwargs['lr']           = float(main_kwargs['lr'])
@@ -106,9 +103,9 @@ def parse_args(args):
     main_kwargs['log_lambda']   = float(main_kwargs['log_lambda'])
     main_kwargs['n_hidden']     = int(main_kwargs['n_hidden'])
     main_kwargs['epsilon']      = float(main_kwargs['epsilon'])
-    main_kwargs['no_split']     = bool(main_kwargs['no_split'])
+    main_kwargs['no_split']     = main_kwargs['no_split'] == 'True'
     main_kwargs['batch_n']        = int(main_kwargs['batch_n'])
-    main_kwargs['LSTM']         = bool(main_kwargs['LSTM'])
+    main_kwargs['LSTM']         = main_kwargs['LSTM'] == 'True'
     main_kwargs['batch_update'] = bool(main_kwargs['batch_update'])
 
     return main_kwargs
@@ -125,6 +122,4 @@ if __name__ == "__main__":
     #     raise(Exception)
 
     kwargs = parse_args(sys.argv[1:])
-    main(**kwargs)
-
- 
+    # main(**kwargs) 

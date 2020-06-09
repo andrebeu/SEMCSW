@@ -106,7 +106,7 @@ def parse_args(args):
     main_kwargs['no_split']     = main_kwargs['no_split'] == 'True'
     main_kwargs['batch_n']        = int(main_kwargs['batch_n'])
     main_kwargs['LSTM']         = main_kwargs['LSTM'] == 'True'
-    main_kwargs['batch_update'] = bool(main_kwargs['batch_update'])
+    main_kwargs['batch_update'] = main_kwargs['batch_update'] == 'True'
 
     return main_kwargs
 
@@ -122,4 +122,5 @@ if __name__ == "__main__":
     #     raise(Exception)
 
     kwargs = parse_args(sys.argv[1:])
-    # main(**kwargs) 
+    # print(kwargs)
+    main(**kwargs) 

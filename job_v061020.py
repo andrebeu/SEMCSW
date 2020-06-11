@@ -1,8 +1,8 @@
 import numpy as np
-from schema_prediction_task_6_02_20 import generate_exp, batch_exp
+from schema_prediction_task_6_10_20 import generate_exp, batch_exp
 from sem.event_models import GRUEvent, LSTMEvent
 
-output_file_path = './json_files_v060220/'
+output_file_path = './json_files_v061020/'
 
 ## sem parameters
 dropout           = 0.0

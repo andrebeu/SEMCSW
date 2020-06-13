@@ -18,7 +18,7 @@ batch_size        = 25.0
 
 def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
     log_lambda=0.0, n_hidden=10, epsilon=1e-5, no_split=False,
-     batch_n=0, LSTM=False, batch_update=True):
+     batch_n=0, LSTM=False, batch_update=True,actor_weight=1.0):
     """ 
     :param n_epochs:    int     (28)
     :param batch_size:  int     (25)
@@ -43,7 +43,7 @@ def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
         model = 'GRU'
 
     # set the kwargs for the story
-    story_kwargs = dict(seed=None)
+    story_kwargs = dict(seed=None, actor_weight=actor_weight)
 
     # set the sem_kwargs
     optimizer_kwargs = dict(lr=lr, beta_1=0.9, beta_2=0.999, epsilon=epsilon, amsgrad=False)
@@ -84,7 +84,7 @@ def parse_args(args):
     # these are the defaults for the function
     main_kwargs = dict(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
     log_lambda=0.0, n_hidden=10, epsilon=1e-5, no_split=False,
-    batch_n=0, LSTM=False, batch_update=True)
+    batch_n=0, LSTM=False, batch_update=True, actor_weight=1.0)
 
     for arg in args:
         k = arg.split("=")[0]
@@ -107,6 +107,7 @@ def parse_args(args):
     main_kwargs['batch_n']        = int(main_kwargs['batch_n'])
     main_kwargs['LSTM']         = main_kwargs['LSTM'] == 'True'
     main_kwargs['batch_update'] = main_kwargs['batch_update'] == 'True'
+    main_kwargs['actor_weight']      = float(main_kwargs['actor_weight'])
 
     return main_kwargs
 
@@ -114,13 +115,7 @@ def parse_args(args):
 
 if __name__ == "__main__":
     import sys
-    # try:
-    #     batch_n = int(sys.argv[1])
-    #     "Running Batch {}:".format(batch_n)
-    # except:
-    #     print('Please specify batch number!')
-    #     raise(Exception)
 
     kwargs = parse_args(sys.argv[1:])
-    # print(kwargs)
+    print(kwargs)
     main(**kwargs) 

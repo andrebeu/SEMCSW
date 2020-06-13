@@ -65,8 +65,8 @@ def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
         tag += '_online' 
 
     # for now, we only consider the basic blocked vs interleaved set up
-    json_tag = '_{}_nhidden{}_e{}_lr{}_n{}_d{}_logalfa_{}_loglmda_{}_batch_{}{}'.format(
-        model, n_hidden, epsilon, lr, n_epochs, dropout, log_alpha, log_lambda, batch_n, tag)
+    json_tag = '_{}_e{}_lr{}_n{}_d{}_logalfa_{}_loglmda_{}_batch_{}{}'.format(
+        model, epsilon, lr, n_epochs, dropout, log_alpha, log_lambda, batch_n, tag)
 
     # run a single batch
     _ = batch_exp(
@@ -83,7 +83,7 @@ def parse_args(args):
 
     # these are the defaults for the function
     main_kwargs = dict(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
-    log_lambda=0.0, n_hidden=10, epsilon=1e-5, no_split=False,
+    log_lambda=0.0, epsilon=1e-5, no_split=False,
     batch_n=0, LSTM=False, batch_update=True)
 
     for arg in args:
@@ -101,7 +101,6 @@ def parse_args(args):
     main_kwargs['lr']           = float(main_kwargs['lr'])
     main_kwargs['log_alpha']    = float(main_kwargs['log_alpha'])
     main_kwargs['log_lambda']   = float(main_kwargs['log_lambda'])
-    main_kwargs['n_hidden']     = int(main_kwargs['n_hidden'])
     main_kwargs['epsilon']      = float(main_kwargs['epsilon'])
     main_kwargs['no_split']     = main_kwargs['no_split'] == 'True'
     main_kwargs['batch_n']        = int(main_kwargs['batch_n'])

@@ -74,13 +74,14 @@ if __name__ == "__main__":
 
 
     # n_hidden_ = [10,]
-    epsilons = [1e-7]
-    lrs = [3e-3, 4e-3, 5e-3, 6e-3, 7e-3]
-    n_epochs_ = [ii for ii in range(5, 75, 5)]
+    epsilons = [1e-9, 1e-7, 1e-5, 1e-3]
+    lrs = [1e-3, 3e-3, 5e-3, 7e-3, 9e-3, 1e-2]
+    n_epochs_ = [round(2**ii,1) for ii in np.arange(1, 7.1, 1.0)]
     log_alphas = [-round(2**ii,1) for ii in np.arange(5, -.1, -1.0)] + \
         [0] + \
         [round(2**ii,1) for ii in np.arange(0, 3.1, 1.0)]
-    log_lambdas = [ii for ii in np.arange(0, 74, 2)]
+    log_lambdas = [0] + \
+        [round(2**ii,1) for ii in np.arange(0, 7.1, 1.0)]
 
     n_batch = 1
     batch_update = True
@@ -109,85 +110,84 @@ if __name__ == "__main__":
                                     list_kwargs.append(kwargs)
 
 
-    epsilons = [1e-7]
-    lrs = [8e-2, 9e-2, 1e-3, 2e-3, 3e-3, 4e-3, 5e-3, 6e-3, 7e-3, 8e-3, 9e-3, 1e-2]
-    n_epochs_ = [ii for ii in range(5, 100, 5)]
-    log_alphas = [-208]
-    log_lambdas = [208]
+    # epsilons = [1e-7]
+    # lrs = [8e-2, 9e-2, 1e-3, 2e-3, 3e-3, 4e-3, 5e-3, 6e-3, 7e-3, 8e-3, 9e-3, 1e-2]
+    # n_epochs_ = [ii for ii in range(5, 100, 5)]
+    # log_alphas = [-208]
+    # log_lambdas = [208]
 
-    n_batch = 16
-    batch_update = True
+    # n_batch = 16
+    # batch_update = True
 
-    for no_split in [True]:
-        for LSTM in [False]:
-            # for n_hidden in n_hidden_:
-            for epsilon in epsilons:
-                for lr in lrs:
-                    for n_epochs in n_epochs_:
-                        for log_alpha in log_alphas:
-                            for log_lambda in log_lambdas:
-                                for b in range(n_batch):
-                                    kwargs = dict(
-                                        no_split=no_split,
-                                        # n_hidden=n_hidden,
-                                        LSTM=LSTM,
-                                        epsilon=epsilon,
-                                        lr=lr,
-                                        n_epochs=n_epochs,
-                                        log_alpha=log_alpha,
-                                        log_lambda=log_lambda,
-                                        batch_n=b,
-                                        batch_update=batch_update,
-                                    )
-                                    list_kwargs.append(kwargs)
+    # for no_split in [True]:
+    #     for LSTM in [False]:
+    #         # for n_hidden in n_hidden_:
+    #         for epsilon in epsilons:
+    #             for lr in lrs:
+    #                 for n_epochs in n_epochs_:
+    #                     for log_alpha in log_alphas:
+    #                         for log_lambda in log_lambdas:
+    #                             for b in range(n_batch):
+    #                                 kwargs = dict(
+    #                                     no_split=no_split,
+    #                                     LSTM=LSTM,
+    #                                     epsilon=epsilon,
+    #                                     lr=lr,
+    #                                     n_epochs=n_epochs,
+    #                                     log_alpha=log_alpha,
+    #                                     log_lambda=log_lambda,
+    #                                     batch_n=b,
+    #                                     batch_update=batch_update,
+    #                                 )
+    #                                 list_kwargs.append(kwargs)
 
 
-    epsilons = [1e-7]
-    lrs = [8e-2, 9e-2, 1e-3, 2e-3, 3e-3, 4e-3, 5e-3, 6e-3, 7e-3, 8e-3, 9e-3, 1e-2]
-    n_epochs_ = [ii for ii in range(5, 100, 5)]
-    log_alphas = [-208]
-    log_lambdas = [208]
+    # epsilons = [1e-7]
+    # lrs = [8e-2, 9e-2, 1e-3, 2e-3, 3e-3, 4e-3, 5e-3, 6e-3, 7e-3, 8e-3, 9e-3, 1e-2]
+    # n_epochs_ = [ii for ii in range(5, 100, 5)]
+    # log_alphas = [-208]
+    # log_lambdas = [208]
 
-    n_batch = 16
-    batch_update = False
+    # n_batch = 16
+    # batch_update = False
 
-    for no_split in [True]:
-        for LSTM in [False]:
-            # for n_hidden in n_hidden_:
-            for epsilon in epsilons:
-                for lr in lrs:
-                    for n_epochs in n_epochs_:
-                        for log_alpha in log_alphas:
-                            for log_lambda in log_lambdas:
-                                for b in range(n_batch):
-                                    kwargs = dict(
-                                        no_split=no_split,
-                                        # n_hidden=n_hidden,
-                                        LSTM=LSTM,
-                                        epsilon=epsilon,
-                                        lr=lr,
-                                        n_epochs=n_epochs,
-                                        log_alpha=log_alpha,
-                                        log_lambda=log_lambda,
-                                        batch_n=b,
-                                        batch_update=batch_update,
-                                    )
-                                    list_kwargs.append(kwargs)
+    # for no_split in [True]:
+    #     for LSTM in [False]:
+    #         for epsilon in epsilons:
+    #             for lr in lrs:
+    #                 for n_epochs in n_epochs_:
+    #                     for log_alpha in log_alphas:
+    #                         for log_lambda in log_lambdas:
+    #                             for b in range(n_batch):
+    #                                 kwargs = dict(
+    #                                     no_split=no_split,
+    #                                     LSTM=LSTM,
+    #                                     epsilon=epsilon,
+    #                                     lr=lr,
+    #                                     n_epochs=n_epochs,
+    #                                     log_alpha=log_alpha,
+    #                                     log_lambda=log_lambda,
+    #                                     batch_n=b,
+    #                                     batch_update=batch_update,
+    #                                 )
+    #                                 list_kwargs.append(kwargs)
 
     # randomize the simulation order for effective sampling speed 
     # (i.e. intermediate progress is more meaningful)
     list_kwargs = np.random.permutation(list_kwargs)
     n = len(list_kwargs)
-    print(list_kwargs)
+    # print(list_kwargs)
+    for kwarg in list_kwargs:
+        print(make_kw_string(kwarg) + '\n' )
     print(n)
 
-    # # create the slurm submissions 
-    for ii, kwargs in enumerate(list_kwargs):
-        print('Submitting job {} of {}'.format(ii + 1, n))
-        make_slurm_shell(kwargs, filename="_slurm.sh")
+    # # # create the slurm submissions 
+    # for ii, kwargs in enumerate(list_kwargs):
+    #     print('Submitting job {} of {}'.format(ii + 1, n))
+    #     make_slurm_shell(kwargs, filename="_slurm.sh")
 
-        os.system('sbatch _slurm.sh')
-        time.sleep(0.25)
-        os.remove('_slurm.sh')
+    #     os.system('sbatch _slurm.sh')
+    #     time.sleep(0.25)
+    #     os.remove('_slurm.sh')
 
 

@@ -2,7 +2,7 @@ import numpy as np
 from schema_prediction_task_6_10_20 import generate_exp, batch_exp
 from sem.event_models import GRUEvent, LSTMEvent
 
-output_file_path = './json_files_v061020_v3/'
+output_file_path = './json_files_v061220/'
 
 ## sem parameters
 dropout           = 0.0
@@ -62,7 +62,7 @@ def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
     if no_split:
         tag += '_nosplit'
     if batch_update == False:
-        tag += '_batch' 
+        tag += '_online' 
 
     # for now, we only consider the basic blocked vs interleaved set up
     json_tag = '_{}_nhidden{}_e{}_lr{}_n{}_d{}_logalfa_{}_loglmda_{}_batch_{}{}'.format(
@@ -122,5 +122,5 @@ if __name__ == "__main__":
     #     raise(Exception)
 
     kwargs = parse_args(sys.argv[1:])
-    # print(kwargs)
+    print(kwargs)
     main(**kwargs) 

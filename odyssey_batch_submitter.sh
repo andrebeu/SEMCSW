@@ -12,5 +12,5 @@ conda create -n schema
 source activate schema
 cd ~/SchemaPrediction
 pip install -r requirements.txt
-python -u schema_prediction_batch_runner_06-02-20.py &> ./logs/batch_submitter.log
+python -u schema_prediction_batch_runner_06-12-20.py &> ./logs/batch_submitter_5.log
 sleep 10

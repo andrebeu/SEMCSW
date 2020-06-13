@@ -12,8 +12,9 @@ run(){
     # scp -r $1@$2:~/SchemaPrediction/json_files/* json_files_e1e-8/
 
 # }
-    rsync -rav --exclude="nosplit"  $1@$2:~/SchemaPrediction/json_files_v060220/* ./json_files_v060220_varyOptim2/
-    rsync -rav --exclude="nosplit"  $1@$2:~/SchemaPrediction/json_files_v061020/* ./json_files_v061020/
+    # rsync -rav $1@$2:~/SchemaPrediction/json_files_v061020_online/ ./json_files_v061020_online/
+    rsync -rav $1@$2:~/SchemaPrediction/json_files_v061020_v3/ ./json_files_v061020_v3/
+    rsync -rav $1@$2:~/SchemaPrediction/json_files_v061220/ ./json_files_v061220/
 }
 
 

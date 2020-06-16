@@ -13,8 +13,8 @@ run(){
 
 # }
     # rsync -rav $1@$2:~/SchemaPrediction/json_files_v061020_online/ ./json_files_v061020_online/
-    rsync -rav $1@$2:~/SchemaPrediction/json_files_v061020_v3/ ./json_files_v061020_v3/
-    rsync -rav $1@$2:~/SchemaPrediction/json_files_v061220/ ./json_files_v061220/
+    rsync -rav $1@$2:~/SchemaPrediction/json_files_v061020/ ./json_files_v061020_aw0_v2/
+    # rsync -rav $1@$2:~/SchemaPrediction/json_files_v061220/ ./json_files_v061220/
 }
 
 

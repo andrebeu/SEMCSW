@@ -17,7 +17,7 @@ batch_size        = 25.0
 # n_hidden          = 40
 
 def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
-    log_lambda=0.0, n_hidden=10, epsilon=1e-5, no_split=False,
+    log_lambda=0.0, epsilon=1e-5, no_split=False,
      batch_n=0, LSTM=False, batch_update=True):
     """ 
     :param n_epochs:    int     (28)
@@ -96,14 +96,14 @@ def parse_args(args):
             main_kwargs[k] = v
         else:
             print("Parameter: {} not found!".format(k))
-    main_kwargs['n_epochs']     = int(main_kwargs['n_epochs'])
-    main_kwargs['batch_size']   = int(main_kwargs['batch_size'])
+    main_kwargs['n_epochs']     = int(float(main_kwargs['n_epochs']))
+    main_kwargs['batch_size']   = int(float(main_kwargs['batch_size']))
     main_kwargs['lr']           = float(main_kwargs['lr'])
     main_kwargs['log_alpha']    = float(main_kwargs['log_alpha'])
     main_kwargs['log_lambda']   = float(main_kwargs['log_lambda'])
     main_kwargs['epsilon']      = float(main_kwargs['epsilon'])
     main_kwargs['no_split']     = main_kwargs['no_split'] == 'True'
-    main_kwargs['batch_n']        = int(main_kwargs['batch_n'])
+    main_kwargs['batch_n']        = int(float(main_kwargs['batch_n']))
     main_kwargs['LSTM']         = main_kwargs['LSTM'] == 'True'
     main_kwargs['batch_update'] = main_kwargs['batch_update'] == 'True'
 

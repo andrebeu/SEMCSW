@@ -2,8 +2,8 @@ import numpy as np
 import tensorflow as tf
 from scipy.special import logsumexp
 from tqdm import tqdm
-from .event_models import GRUEvent
-from .utils import delete_object_attributes, processify
+from sem.event_models import GRUEvent
+from sem.utils import delete_object_attributes, processify
 
 # there are a ~ton~ of tf warnings from Keras, suppress them here
 import os
@@ -233,7 +233,7 @@ class SEM(object):
 
 
         # cache the diagnostic measures
-        log_like[-1, :len(active)] = np.sum(lik, axis=0)
+        log_like[-1, :len(active)] = np.min(lik, axis=0)  # only look at the most surprising scene
 
         # calculate the log prior
         log_prior[-1, :len(active)] = np.log(prior[:len(active)])

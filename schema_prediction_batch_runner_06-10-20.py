@@ -2,7 +2,7 @@ import numpy as np
 from schema_prediction_task_6_10_20 import generate_exp, batch_exp
 import time, tqdm, os
 
-output_file_path = './json_files_v061020_v3/'
+output_file_path = './json_files_v061020/'
 
 
 def make_kw_string(kwargs):
@@ -74,16 +74,21 @@ if __name__ == "__main__":
 
 
     # n_hidden_ = [10,]
-    epsilons = [1e-9, 1e-7, 1e-5, 1e-3]
-    lrs = [1e-3, 3e-3, 5e-3, 7e-3, 9e-3, 1e-2]
-    n_epochs_ = [round(2**ii,1) for ii in np.arange(1, 7.1, 1.0)]
-    log_alphas = [-round(2**ii,1) for ii in np.arange(5, -.1, -1.0)] + \
-        [0] + \
-        [round(2**ii,1) for ii in np.arange(0, 3.1, 1.0)]
-    log_lambdas = [0] + \
-        [round(2**ii,1) for ii in np.arange(0, 7.1, 1.0)]
+    # epsilons = [1e-9, 1e-7, 1e-5, 1e-3]
+    # lrs = [1e-3, 3e-3, 5e-3, 7e-3, 9e-3, 1e-2]
+    # n_epochs_ = [round(2**ii,1) for ii in np.arange(1, 7.1, 1.0)]
+    # log_alphas = [-round(2**ii,1) for ii in np.arange(5, -.1, -1.0)] + \
+    #     [0] + \
+    #     [round(2**ii,1) for ii in np.arange(0, 3.1, 1.0)]
+    # log_lambdas = [0] + \
+    #     [round(2**ii,1) for ii in np.arange(0, 7.1, 1.0)]
 
-    n_batch = 1
+    epsilons = [1e-5]
+    lrs = [7e-4, 8e-4, 9e-4, 1e-3,]
+    n_epochs_ = [int(round(2**ii,0)) for ii in np.arange(4.5, 7.1, 0.5)]
+    log_alphas = [-1, 0] + [round(2**ii,1) for ii in np.arange(0, 3.1, 0.5)]
+    log_lambdas = [0] + [round(2**ii,1) for ii in np.arange(0, 4.1, 0.5)]
+    n_batch = 8
 
     list_kwargs = []
 
@@ -110,13 +115,41 @@ if __name__ == "__main__":
                                     )
                                     list_kwargs.append(kwargs)
 
+    log_alphas = [-208]
+    log_lambdas = [208]
+    
+    for no_split in [True]:
+        for LSTM in [False]:
+            for batch_update in [False]:
+            # for n_hidden in n_hidden_:
+                for epsilon in epsilons:
+                    for lr in lrs:
+                        for n_epochs in n_epochs_:
+                            for log_alpha in log_alphas:
+                                for log_lambda in log_lambdas:
+                                    for b in range(n_batch):
+                                        kwargs = dict(
+                                            no_split=no_split,
+                                            # n_hidden=n_hidden,
+                                            LSTM=LSTM,
+                                            epsilon=epsilon,
+                                            lr=lr,
+                                            n_epochs=n_epochs,
+                                            log_alpha=log_alpha,
+                                            log_lambda=log_lambda,
+                                            batch_n=b,
+                                            actor_weight=0.0,
+                                            batch_update=batch_update,
+                                        )
+                                        list_kwargs.append(kwargs)
+
 
     # randomize the simulation order for effective sampling speed 
     # (i.e. intermediate progress is more meaningful)
     list_kwargs = np.random.permutation(list_kwargs)
     n = len(list_kwargs)
     for kwarg in list_kwargs:
-        print(make_kw_string(kwarg) + '\n' )
+        print(make_kw_string(kwarg))
         
     print(n)
 
@@ -129,4 +162,11 @@ if __name__ == "__main__":
     #     time.sleep(0.25)
     #     os.remove('_slurm.sh')
 
+
+    # for ii, kwargs in enumerate(list_kwargs):
+    #     print('Submitting job {} of {}'.format(ii + 1, n))
+    #     kw_string = make_kw_string(kwargs)
+    #     command  = 'python job_v061020.py {}'.format(kw_string)
+    #     print(command)
+    #     os.system(command)
 

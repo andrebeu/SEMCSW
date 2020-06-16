@@ -2,7 +2,7 @@ import numpy as np
 from schema_prediction_task_6_10_20 import generate_exp, batch_exp
 from sem.event_models import GRUEvent, LSTMEvent
 
-output_file_path = './json_files_v061020_v3/'
+output_file_path = './json_files_v061020/'
 
 ## sem parameters
 dropout           = 0.0
@@ -62,7 +62,7 @@ def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
     if no_split:
         tag += '_nosplit'
     if batch_update == False:
-        tag += '_batch' 
+        tag += '_online' 
 
     # for now, we only consider the basic blocked vs interleaved set up
     json_tag = '_{}_nhidden{}_e{}_lr{}_n{}_d{}_logalfa_{}_loglmda_{}_batch_{}{}'.format(
@@ -96,15 +96,16 @@ def parse_args(args):
             main_kwargs[k] = v
         else:
             print("Parameter: {} not found!".format(k))
-    main_kwargs['n_epochs']     = int(main_kwargs['n_epochs'])
-    main_kwargs['batch_size']   = int(main_kwargs['batch_size'])
+            
+    main_kwargs['n_epochs']     = int(float(main_kwargs['n_epochs']))
+    main_kwargs['batch_size']   = int(float(main_kwargs['batch_size']))
     main_kwargs['lr']           = float(main_kwargs['lr'])
     main_kwargs['log_alpha']    = float(main_kwargs['log_alpha'])
     main_kwargs['log_lambda']   = float(main_kwargs['log_lambda'])
-    main_kwargs['n_hidden']     = int(main_kwargs['n_hidden'])
+    main_kwargs['n_hidden']     = int(float(main_kwargs['n_hidden']))
     main_kwargs['epsilon']      = float(main_kwargs['epsilon'])
     main_kwargs['no_split']     = main_kwargs['no_split'] == 'True'
-    main_kwargs['batch_n']        = int(main_kwargs['batch_n'])
+    main_kwargs['batch_n']        = int(float(main_kwargs['batch_n']))
     main_kwargs['LSTM']         = main_kwargs['LSTM'] == 'True'
     main_kwargs['batch_update'] = main_kwargs['batch_update'] == 'True'
     main_kwargs['actor_weight']      = float(main_kwargs['actor_weight'])

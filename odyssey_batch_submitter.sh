@@ -8,9 +8,12 @@
 #SBATCH -e slurm_output/slurm.%N.%j.err # STDERR
 
 module load Anaconda3/2019.10
-conda create -n schema
+# conda create -n schema
 source activate schema
 cd ~/SchemaPrediction
-pip install -r requirements.txt
-python -u schema_prediction_batch_runner_06-12-20.py &> ./logs/batch_submitter_5.log
+# pip install -r requirements.txt
+# rm ~/SchemaPrediction/logs*
+# rm ~/SchemaPrediction/slurm_output/*
+python -u schema_prediction_batch_runner_06-10-20.py &> ./logs/batch_submitter_0.log
+# python -u schema_prediction_batch_runner_06-12-20.py &> ./logs/batch_submitter_1.log
 sleep 10

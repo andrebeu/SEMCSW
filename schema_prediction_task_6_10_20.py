@@ -482,7 +482,7 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
 
 
         # run the model
-        run_kwargs = dict(save_x_hat=True, progress_bar=sem_progress_bar, minimize_memory=False)
+        run_kwargs = dict(save_x_hat=True, progress_bar=sem_progress_bar)
 
         if not no_split:
             results = sem_run_with_boundaries(x, sem_kwargs, run_kwargs)

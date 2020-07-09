@@ -7,6 +7,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.backend import l2_normalize
 from sem.utils import fast_mvnorm_diagonal_logprob, unroll_data, get_prior_scale, delete_object_attributes
 from scipy.stats import norm
+import numpy as np
 
 class RecurrentLinearEvent(LinearEvent):
 

@@ -1,11 +1,8 @@
 import numpy as np
-from schema_prediction_task_6_10_20 import generate_exp, batch_exp
+from schema_prediction_task_7_14_20 import generate_exp, batch_exp
 import time, tqdm, os
 
-## this version uses the 6_10_20 task, but a modified event model
-
-output_file_path = './json_files_v070820/'
-
+output_file_path = './json_files_v071420/'
 
 def make_kw_string(kwargs):
     kw_string = ''
@@ -34,7 +31,7 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
         "module load Anaconda3/2019.10",
         "source activate schema",
         "cd ~/SchemaPrediction",
-        "python -u job_v070820.py {kw_string} &> ./logs/{tag}c.log".format(kw_string=kw_string, tag=tag),
+        "python -u job_v071420.py {kw_string} &> ./logs/{tag}c.log".format(kw_string=kw_string, tag=tag),
         "sleep 10",
     ]
 
@@ -58,14 +55,14 @@ if __name__ == "__main__":
     epsilons = [1e-5]  
     
     # extensive testing shows that a good learning rate is an order of magnitiude arround 1e-3 
-    lrs = [np.round(ii*10**-4,4) for ii in range(1, 10, 2)] + \
-        [np.round(ii*10**-3,3) for ii in range(1, 11, 2)]
+    lrs = [np.round(ii*10**-4,4) for ii in range(3, 10, 2)] + \
+        [np.round(ii*10**-3,3) for ii in range(1, 9, 2)]
 
     # n_epochs_ = [ii for ii in range(4, 128, 4)]
-    log_alphas = [-round(2**ii,1) for ii in np.arange(6, -.1, -1.0)] + \
+    log_alphas = [-round(2**ii,1) for ii in np.arange(4, -.1, -1.0)] + \
         [0] + \
-        [round(2**ii,1) for ii in np.arange(0, 5.1, 1.0)]
-    log_lambdas = [int(ii) for ii in np.logspace(3.5, 7, base=2, num=8)]
+        [round(2**ii,1) for ii in np.arange(0, 4.1, 1.0)]
+    log_lambdas = [int(ii) for ii in np.logspace(2.5, 5.5, base=2, num=8)]
 
 
 
@@ -103,7 +100,7 @@ if __name__ == "__main__":
     
     for no_split in [True]:
         for LSTM in [False]:
-            for mixed in [True]:
+            for mixed in [False]:
                 for epsilon in epsilons:
                     for lr in lrs:
                         for n_epochs in n_epochs_:

@@ -15,5 +15,5 @@ cd ~/SchemaPrediction
 # rm ~/SchemaPrediction/logs*
 # rm ~/SchemaPrediction/slurm_output/*
 # python -u schema_prediction_batch_runner_06-10-20.py &> ./logs/batch_submitter_0.log
-python -u schema_prediction_batch_runner_07-08-20.py &> ./logs/batch_submitter_0.log
+python -u schema_prediction_batch_runner_07-14-20.py &> ./logs/batch_submitter_0.log
 sleep 10

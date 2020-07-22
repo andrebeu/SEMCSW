@@ -2,7 +2,9 @@ import numpy as np
 from schema_prediction_task_7_14_20 import generate_exp, batch_exp
 import time, tqdm, os
 
-output_file_path = './json_files_v071420/'
+# use the same task as before, but shorten the trials on the 
+
+output_file_path = './json_files_v072120/'
 
 def make_kw_string(kwargs):
     kw_string = ''
@@ -30,9 +32,9 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
         "",
         "module load Anaconda3/2019.10",
         "source activate schema",
-        "cd ~/SchemaPrediction",
+        "cd ~/SchemaPrediction", 
         "pip install -r requirements.txt &> ./logs/sem_install.log",
-        "python -u job_v071420.py {kw_string} &> ./logs/{tag}c.log".format(kw_string=kw_string, tag=tag),
+        "python -u job_v072120.py {kw_string} &> ./logs/{tag}c.log".format(kw_string=kw_string, tag=tag),
         "sleep 10",
     ]
 

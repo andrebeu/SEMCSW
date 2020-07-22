@@ -47,7 +47,7 @@ def logsumexp_mean(x):
     """ return the log of the mean, given a 1-d array of log values"""
     return logsumexp(x) - np.log(len(x))
 
-def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embedding_library=None, 
+def generate_exp(condition, seed=None, err=0.1, n_train=80, n_test=40, embedding_library=None, 
                     actor_weight=1.0):
     """
     :param condition: (str), either 'blocked', 'interleaved', 'early', 'middle', or 'late'
@@ -328,15 +328,13 @@ def classify_verbs(results, y):
     return decoding_acc, decoding_prob_corr, prob_corr_2afc
 
 
-def score_results(results, e, y):
+def score_results(results, e, y, n_train=160, n_test=40):
     """ function that takes in the completed SEM results object, plus vector of 
     true nodes and create prelimiarly analyses
     """
 
     # hard code these for now
-    n_trials = 200
-    n_train  = 160
-    n_test   = 40
+    n_trials = n_train + n_test
 
     # create a decoder based on both the training stimuli from both experiments
     decoding_acc, decoding_prob_corr, prob_corr_2afc = classify_verbs(results, y)
@@ -457,12 +455,14 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
     :param debug: (bool, default=False), only run the 1st two blocks of trials
     :param save_to_json: (bool, default=False), save intermediate results to file
     """
-    # if hasattr(stories_kwargs['n_train']):
-    #     assert(stories_kwargs['n_trian'] == n_train)
-    # if hasattr(stories_kwargs['n_test']):
+    # if hasattr(stories_kwargs, 'n_train'):
+    #     assert(stories_kwargs['n_train'] == n_train)
+    # if hasattr(stories_kwargs, 'n_test'):
     #     assert(stories_kwargs['n_test'] == n_test)
 
-
+    stories_kwargs['n_train'] = n_train
+    stories_kwargs['n_test'] = n_test
+    
     # create a function that takes in "blocked" or "interleaved" as an argument and runs a batch of trials
     def run_condition(condition, batch=1, no_split=False):
         """
@@ -495,7 +495,7 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
             results = no_split_sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
         results.x_orig = np.concatenate(x)
         
-        return score_results(results, e, y)
+        return score_results(results, e, y, n_train=n_train, n_test=n_test)
 
     results = []
     boundaries = []

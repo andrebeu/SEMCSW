@@ -44,6 +44,7 @@ import tensorflow as tf
 import seaborn as sns
 from tqdm import tqdm
 from sklearn import metrics
+from sklearn.metrics import adjusted_rand_score
 sns.set_context('talk')
 
 # imports from SEM model
@@ -63,6 +64,9 @@ from tensorflow.keras.backend import l2_normalize
 from sem.utils import fast_mvnorm_diagonal_logprob, unroll_data, get_prior_scale, delete_object_attributes
 from scipy.stats import norm
 import numpy as np
+
+import json
+
 
 class GRUEvent_normed(RecurrentLinearEvent):
 
@@ -341,12 +345,169 @@ def count_repeats(e_hat):
         
     return repeat_list
 
-def batch_exp_balanced_mem(sem_kwargs, stories_kwargs, gibbs_kwargs, n_batch=12,
+
+def classify_verbs(results, y):
+    # create a decoder based on both the training stimuli from both experiments
+    
+    clf_class = LogisticRegression
+    clf_kwargs = dict(C=10.0, multi_class='multinomial', solver='lbfgs')
+    verb_decoding_clf = clf_class(**clf_kwargs)
+    verb_decoding_clf.fit(results.x_orig, y)
+
+    # use the decoder
+    y_hat = verb_decoding_clf.predict(results.x_hat)
+    decoding_acc = y == y_hat
+    decoding_prob_corr = np.array(
+            [verb_decoding_clf.predict_proba(results.x_hat)[ii, y0]
+                for ii, y0 in enumerate(y)]
+            )
+
+        # vector of scene labels
+    scene = np.zeros_like(y)
+    scene[y >= 1] += 1
+    scene[y >= 3] += 1
+    scene[y >= 5] += 1 
+    scene[y >= 7] += 1
+
+
+
+    def decode_2afc(scene_selected):
+        clf_class = LogisticRegression
+        clf_kwargs = dict(C=10.0, multi_class='multinomial', solver='lbfgs')
+        verb_decoding_clf = clf_class(**clf_kwargs)
+
+        _sel = scene_selected == scene
+        _y = y[_sel] - np.min(y[_sel])
+        verb_decoding_clf.fit(results.x_orig[_sel, :], _y)
+        probs = verb_decoding_clf.predict_proba(results.x_hat[_sel, :])
+        prob_corr = np.array([probs[ii, y0] for ii, y0 in enumerate(_y)])
+        return prob_corr
+        
+    prob_corr_2afc = np.ones_like(decoding_prob_corr)
+    prob_corr_2afc[scene == 1] = decode_2afc(1)
+    prob_corr_2afc[scene == 2] = decode_2afc(2)
+    prob_corr_2afc[scene == 3] = decode_2afc(3)
+    # prob_corr_2afc[scene == 4] = decode_2afc(4)
+
+
+    return decoding_acc, decoding_prob_corr, prob_corr_2afc
+
+
+
+def score_results(results, e, y, n_train=24, n_test=14):
+    """ function that takes in the completed SEM results object, plus vector of 
+    true nodes and create prelimiarly analyses
+    """
+
+    # hard code these for now
+    n_trials = n_train + n_test
+
+    # create a decoder based on both the training stimuli from both experiments
+    decoding_acc, decoding_prob_corr, prob_corr_2afc = classify_verbs(results, y)
+    
+    ###### model scoring and analyses ##### 
+    e_hat = results.e_hat
+    schema_repeats = count_repeats(e)
+    schema_reps_inferred = count_repeats(e_hat)
+
+    # # calculate prediction error (max distance ~ 1.0)
+    pes = np.linalg.norm(results.x_hat - results.x_orig, axis=1) / np.sqrt(2)
+
+    # # these are the relevant prediction trials in the test phase
+    t = np.array([t0 for _ in range(n_trials) for t0 in range(5)])
+    pred_trials = ((t == 2) | (t == 3))
+    is_test = np.array([t0 >= n_train for t0 in range(n_trials) for _ in range(5)])
+
+    results = [{
+        'Trials': 'All',
+        'adjRand': float(adjusted_rand_score(e_hat, e)),
+        'nClusters': len(set(e_hat)), 
+        'pe': float(np.mean(pes)),
+        'pe (probes)': float(np.mean(pes[pred_trials])),
+        'verb decoder Accuracy': float(np.mean(decoding_acc[pred_trials])),
+        'verb decoder Accuracy Prob': float(np.mean(decoding_prob_corr[pred_trials])),
+        'verb 2 AFC decoder Prob': float(np.mean(prob_corr_2afc[pred_trials & pred_trials])),
+    }]
+    results.append({
+        'Trials': 'Training',
+        'adjRand': float(adjusted_rand_score(e_hat[:n_train], e[:n_train])),
+        'nClusters': len(set(e_hat[:n_train])), 
+        'pe': float(np.mean(pes[is_test == False])),
+        'pe (probes)': float(np.mean(pes[pred_trials & (is_test == False)])),
+        'verb decoder Accuracy': float(np.mean(decoding_acc[pred_trials & (is_test == False)])),
+        'verb decoder Accuracy Prob': float(np.mean(decoding_prob_corr[pred_trials & (is_test == False)])),
+        'verb 2 AFC decoder Prob': float(np.mean(prob_corr_2afc[pred_trials & (is_test == False)])),
+    })
+    results.append({
+        'Trials': 'Test',
+        'adjRand': float(adjusted_rand_score(e_hat[n_train:], e[n_train:])),
+        'nClusters': len(set(e_hat[n_train:])), 
+        'pe': float(np.mean(pes[is_test])),
+        'pe (probes)': float(np.mean(pes[pred_trials & is_test])),
+        'verb decoder Accuracy': float(np.mean(decoding_acc[pred_trials & is_test])),
+        'verb decoder Accuracy Prob': float(np.mean(decoding_prob_corr[pred_trials & is_test])),
+        'verb 2 AFC decoder Prob': float(np.mean(prob_corr_2afc[pred_trials & is_test])),
+        'cluster re-use': float(np.mean([c in set(e_hat[:n_train]) for c in e_hat[n_train:]])),
+    })
+
+    # loop through these measure to create a memory-efficient list of dictionaries
+    # (as opposed to a memory-inefficient list of pandas DataFrames)
+    _bounds_vec = get_boundaries(e_hat)
+    _new_event_prob = get_new_event_prob(e_hat)
+    _total_n_events = get_total_n_events(e_hat)
+    scence_counter = 0
+    boundaries = []
+    prediction_err = []
+    for t in range(n_trials):
+        boundaries.append(
+            {
+                'Trials': ['Training', 'Test'][t >= n_train],
+                # 'Condition': condition, 
+                # 'batch': batch,
+                'Boundaries': int(_bounds_vec[t]),
+                't': t,
+                'Schema Repeats': schema_repeats[t],
+                'New Event': int(_new_event_prob[t]),
+                'Total N Events': int(_total_n_events[t]),
+                'e_hat': int(e_hat[t]),
+            }
+        )
+
+        for kk in range(5):
+            prediction_err.append(
+                {
+                    'Story': t,
+                    # 'Condition': condition,
+                    # 'batch': batch,
+                    't': kk,
+                    'Trials': ['Training', 'Test'][t >= n_train],
+                    'pe': float(pes[scence_counter]),
+                    'Schema True': int(e[t]),
+                    'Schema Repeats': schema_repeats[t],
+                    'Schema Repeats (Inferred)': schema_reps_inferred[t],
+                    'verb decoder Accuracy': float(decoding_acc[scence_counter]),
+                    'verb decoder Accuracy Prob': float(decoding_prob_corr[scence_counter]),
+                    'verb 2 AFC decoder Prob': float(prob_corr_2afc[scence_counter]),
+                }
+            )
+            scence_counter += 1
+
+
+    # Delete SEM, clear all local variables
+    x, y, e = None, None, None, 
+    e_hat, schema_repeats, schema_reps_inferred, pes = None, None, None, None
+    t, pred_trials, decoding_acc = None, None, None
+    decoding_prob_corr, decoding_acc, prob_corr_2afc = None, None, None
+
+    # return results!
+    return results, boundaries, prediction_err
+
+
+def batch_exp(sem_kwargs, stories_kwargs, gibbs_kwargs, n_batch=12,
          n_stories=12, epsilon_e=0.25, reconstruct=True):
 
     results = []
     boundaries = []
-    new_event = []
     prediction_err = []
 
     # set fixed params
@@ -382,302 +543,54 @@ def batch_exp_balanced_mem(sem_kwargs, stories_kwargs, gibbs_kwargs, n_batch=12,
         y_interleaved = np.reshape([y_blocked.reshape((-1, 5)).tolist()[ii] 
                                     for ii in interleaved_ordering], -1)
 
-        # # run the blocked condition
-        # sem_model_blk = SEM(**sem_kwargs)
-        # sem_model_blk.run_w_boundaries(blocked_stories + test_stories, 
-        #                                save_x_hat=True, progress_bar=False)
-
-        # # cache the original embedded vectors for the memory model
-        # sem_model_blk.results.x_orig = np.concatenate(
-        #     blocked_stories + test_stories)
-
+        # run the blocked condition
         run_kwargs = dict(save_x_hat=True, progress_bar=False)
         results_blk = sem_run_with_boundaries(blocked_stories + test_stories, sem_kwargs, run_kwargs)
         results_blk.x_orig = np.concatenate(blocked_stories + test_stories)
         
-        if reconstruct:
-            reconstruction_acc = {}
-
-            # put reconstruction in a function to avoid overwritting variables
-            def recon(sem_model):
-                # subselect the trials to use in reconstruction (only test trials)
-                x_test = results.x_orig[-14*5:, :]
-                e_test = results.e_hat[-14:]
-
-                e_true = np.concatenate([[e0] * 5 for e0 in e_test])
-                y_mem = create_corrupted_trace(x_test, e_true, tau=gibbs_kwargs['tau'],
-                                                epsilon_e=epsilon_e, b=gibbs_kwargs['b'])
-
-                gibbs_kwargs['y_mem'] = y_mem
-                gibbs_kwargs['sem_model'] = sem_model
-                y_samp, e_samp, x_samp = gibbs_memory_sampler(**gibbs_kwargs)
-                return np.mean(reconstruction_accuracy(y_samp, y_mem))
-            
-            reconstruction_acc["Blocked"] = recon(sem_model_blk)
-
         # run the interleaved condition
-        # sem_model_int = SEM(**sem_kwargs)
-        # sem_model_int.model = sem_model_blk.model # re-use the tensorflow model
-        # sem_model_int.run_w_boundaries(interleaved_stories + test_stories, save_x_hat=True, progress_bar=False)
-
         run_kwargs = dict(save_x_hat=True, progress_bar=False)
         results_int = sem_run_with_boundaries(interleaved_stories + test_stories, sem_kwargs, run_kwargs)
         results_int.x_orig = np.concatenate(interleaved_stories + test_stories)
-        
-
-        # # cache the original embedded vectors for the memory model
-        # results_int.x_orig = np.concatenate(interleaved_stories + test_stories)
-
-        # for sem_model, cond in zip([sem_model_blk, sem_model_int], ['Blocked', "Interleaved"]):
-        if reconstruct:
-            reconstruction_acc["Interleaved"] = recon(sem_model_int)
-
-
+    
         ###### model scoring and analyses #####
 
-        # create a decoder based on both the training stimuli from both experiments
-        verb_embeddings = {ii: embedding_library['Verb{}'.format(ii)] for ii in range(8)}  # this is used a lot
+        # add batch number and condition to all of the results
+        def add_batch_cond(json_data, condition):
+            for ii in range(len(json_data)):
+                json_data[ii]['batch'] = kk
+                json_data[ii]['Condition'] = condition
+            return json_data
 
-        # create a classifier using all of the training and test training (produces better declassification)
-        X_orig = np.concatenate([
-            np.concatenate(blocked_stories),
-            np.concatenate(test_stories)
-            ])
-        y_orig = np.concatenate([y_blocked, y_test])
-        verb_decoding_clf = LogisticRegression(C=10.0, multi_class='multinomial', solver='lbfgs')
-        verb_decoding_clf.fit(X_orig, y_orig)
+        for sem_results, condition in zip([results_blk, results_int], ['Blocked', 'Interleaved']):
 
-        # note, these are scalled
-        X_verbs = np.concatenate(
-            [verb_embeddings[y0] for y0 in y_orig]) / np.sqrt(5)
-        
-        embedding_noise_vars = np.var(X_verbs - X_orig, axis=0)
-
-        # build an approximately Bayesian decoder using the empirical 
-        # embedding noise
-        def gaussian_decoder_probabilities(X):
-            """ returns the pmf over the verbs"""
-            
-            # note, these are scaled
-            encoded_verbs = {
-                ii: encode(verb_embeddings[ii], embedding_library['isVerb']) 
-                / np.sqrt(5) for ii in verb_embeddings.keys()
-            }
-
-            # re-write for code clarity
-            def _log_likelihood(X):
-                return fast_mvnorm_diagonal_logprob(X, embedding_noise_vars)
-
-            def _decode_vector(_X):
-                _log_pmf = np.array([_log_likelihood(X - encoded_verbs[ii]) 
-                                    for ii in encoded_verbs.keys()])
-                _log_pmf -= logsumexp(_log_pmf)
-
-                return np.exp(_log_pmf).reshape(1, -1)
-            
-            if np.ndim(X) == 1:
-                return _decode_vector(X)
-            
-            # this intentionally recursive (doesn't really need to be....)
-            return np.concatenate(
-                [gaussian_decoder_probabilities(X[ii, :]) 
-                for ii in range(np.shape(X)[0])], axis=0)
-
-        # pull metrics from model
-
-        for sem_results, cond in zip([results_blk, results_int], 
-                                   ['Blocked', "Interleaved"]):
-            if cond is "Blocked":
-                e_train = e_blk_train
-                schema_repeats = schema_repeats_blk
+            if condition == 'Blocked':
+                e = e_blk_train + e_test
+                y = np.concatenate([y_blocked, y_test])
             else:
-                e_train = e_int_train
-                schema_repeats = schema_repeats_int
-            
-            e_hat = sem_results.e_hat
-            schema_reps_inferred = count_repeats(e_hat)
+                e = e_int_train + e_test
+                y = np.concatenate([y_interleaved, y_test])
 
-            # calculate prediction error (max distance ~ 1.0)
-            pes = np.linalg.norm(sem_results.x_hat - 
-                                 sem_results.x_orig, axis=1) / np.sqrt(2)
+            _res, _bound, _pred = score_results(sem_results, e, y)
+            _res = add_batch_cond(_res, condition)
+            _bound = add_batch_cond(_bound, condition)
+            _pred = add_batch_cond(_pred, condition)
 
-            # these are the relevant prediction trials in the test phase
-            t = np.array([list(range(5)) * (n_stories * 2 + 14)]).reshape(-1)
-            pred_trials = ((t == 2) | (t == 3)) & \
-              np.array([0] * 5 * n_stories * 2 + [1] * 14 * 5, dtype=bool)
+            results += _res
+            boundaries += _bound
+            prediction_err += _pred
 
-            # calculate decoding accuracy (this only considers the 
-            # point-estimate of x_hat for simplicity)
-            if cond == 'Blocked':
-              y_true = np.concatenate([y_blocked, y_test])
-            else:
-              y_true = np.concatenate([y_interleaved, y_test])
-            y_hat = verb_decoding_clf.predict(sem_results.x_hat)
-            
-            # this is a boolean accuracy vector for each scene in the data
-            decoding_acc = y_true == y_hat
-            decoding_prob_corr = np.array(
-                [verb_decoding_clf.predict_proba(sem_results.x_hat)[ii, y0]
-                 for ii, y0 in enumerate(y_true)]
-                )
+        # save the output to json files (will overwrite?)
 
-            # here use the Gaussian classifier, again for each scene in the data
-            decoding_probs_guas = gaussian_decoder_probabilities(
-                sem_results.x_hat)
+        with open('./SilvyTask_newAnal_results.json', 'w') as fp:
+            json.dump(results, fp)
+        with open('./SilvyTask_newAnal_boundaries.json', 'w') as fp:
+            json.dump(boundaries, fp)
+        with open('./SilvyTask_newAnal_prederr.json', 'w') as fp:
+            json.dump(prediction_err, fp)
 
-            y_hat = np.argmax(decoding_probs_guas, axis=1)
-
-            # boolean accuracy
-            decoding_acc_gaus = y_true == y_hat
-            # probability measure
-            decoding_prob_corr_gaus = np.array(
-                [decoding_probs_guas[ii, y0] for ii, y0 in enumerate(y_true)]
-            )
-
-            # also calculate the 2AFC log odds
-            test_sequence = [
-                [0, 1, 3, 5, 7],  # g
-                [0, 1, 3, 5, 7],  # g
-                [0, 2, 3, 6, 7],
-                [0, 1, 4, 5, 7],
-                [0, 2, 4, 6, 7],  # g
-                [0, 2, 4, 6, 7],  # g
-                [0, 1, 4, 5, 7],
-                [0, 2, 3, 6, 7],
-                [0, 1, 3, 5, 7],  # g
-                [0, 2, 4, 6, 7],  # g
-                [0, 2, 3, 6, 7],
-                [0, 1, 4, 5, 7],
-                [0, 1, 3, 5, 7],  # g
-                [0, 2, 4, 6, 7],  # g
-            ]
-
-            test_foil_sequence = [
-                [0, 1, 4, 6, 7],  # g
-                [0, 1, 4, 6, 7],  # g
-                [0, 2, 4, 5, 7],
-                [0, 1, 3, 6, 7],
-                [0, 2, 3, 5, 7],  # g
-                [0, 2, 3, 5, 7],  # g
-                [0, 1, 3, 6, 7],
-                [0, 2, 4, 5, 7],
-                [0, 1, 4, 6, 7],  # g
-                [0, 2, 3, 5, 7],  # g
-                [0, 2, 4, 5, 7],
-                [0, 1, 3, 6, 7],
-                [0, 1, 4, 6, 7],  # g
-                [0, 2, 3, 5, 7],  # g
-            ]
-            p = verb_decoding_clf.predict_proba(sem_results.x_hat)[5*n_train:, :]
-            log_odds_decoder = np.log([p[t][ii] for t, ii in enumerate(np.reshape(test_sequence, -1))]) - \
-                                np.log([p[t][ii] for t, ii in enumerate(np.reshape(test_foil_sequence, -1))])
-
-            p = gaussian_decoder_probabilities(sem_results.x_hat)[5*n_train:, :]
-            log_odds_decoder_gauss = np.log([p[t][ii] for t, ii in enumerate(np.reshape(test_sequence, -1))]) - \
-                                np.log([p[t][ii] for t, ii in enumerate(np.reshape(test_foil_sequence, -1))])
-
-
-            # get the distances to the (1) the correct verb and (2) the foil sequence
-            
-
-            results.append({
-                'Trials': 'Training',
-                'Condition': cond,
-                'batch': kk,
-                'adjustMI': adjusted_mutual_info_score(e_hat[:n_train], e_train, average_method='arithmetic'),
-                'nClusters': len(set(e_hat[:n_train])), 
-                'pe': np.mean(pes[:5 * n_stories * 2]),
-                'verb Accuracy': np.mean(decoding_acc[:5 * n_stories * 2]),
-                'verb Accuracy Prob': np.mean(decoding_prob_corr[:5 * n_stories * 2]),
-            })
-            results.append({
-                'Trials': 'All',
-                'Condition': cond,
-                'batch': kk,
-                'adjustMI': adjusted_mutual_info_score(e_hat, e_train + e_test, average_method='arithmetic'),
-                'nClusters': len(set(e_hat)), 
-                'pe': np.mean(pes),
-                'verb Accuracy': np.mean(decoding_acc),
-                'verb Accuracy Prob': np.mean(decoding_prob_corr),
-            })
-            results.append({
-                'Trials': 'Test',
-                'Condition': cond,
-                'batch': kk,
-                'adjustMI': adjusted_mutual_info_score(e_hat[n_train:], e_test, average_method='arithmetic'),
-                'nClusters': len(set(e_hat[n_train:])), 
-                'pe': np.mean(pes[5 * n_stories * 2:]),
-                'verb Accuracy': np.mean(decoding_acc[5 * n_stories * 2:]),
-                'verb Accuracy Prob': np.mean(decoding_prob_corr[5 * n_stories * 2:]),
-                'cluster re-use': np.mean([c in set(e_hat[:n_train]) for c in e_hat[n_train:]]),
-            })
-            if reconstruct:
-                results[-1]['memory reconstruction'] = reconstruction_acc[cond]
-
-            results.append({
-                'Trials': 'Probes',
-                'Condition': cond,
-                'batch': kk,
-                'pe': np.mean(pes[pred_trials]),
-                'verb Accuracy': np.mean(decoding_acc[pred_trials]),
-                'verb Accuracy Prob': np.mean(decoding_prob_corr[pred_trials]),
-                'verb Accuracy (gaus)': np.mean(decoding_acc_gaus[pred_trials]),
-                'verb Accuracy Prob (gaus)': np.mean(decoding_prob_corr_gaus[pred_trials]),
-                'cluster re-use': np.mean([c in set(e_hat[:n_train]) for c in e_hat[n_train:]]),
-                '2AFC log odds': np.mean(log_odds_decoder),
-                '2AFC log odds (gaus)': np.mean(log_odds_decoder_gauss)
-            })
-            
-            boundaries.append(pd.DataFrame({
-                'Trials': n_train * ['Training'],
-                'Condition': n_train * [cond], 
-                'batch': n_train * [ii],
-                'Boundaries': get_boundaries(e_hat[:n_train]),
-                't': list(range(n_train)),
-                'Schema Repeats': schema_repeats[:n_train],
-
-            }))
-            boundaries.append(pd.DataFrame({
-                'Trials': n_test * ['Test'],
-                'Condition': n_test * [cond], 
-                'batch': n_test * [ii],
-                'Boundaries': get_boundaries(e_hat[n_train:]),
-                't': list(range(n_test)),
-                'Schema Repeats': schema_repeats[n_train:],
-            }))
-
-            new_event.append(pd.DataFrame({
-                'Trials':  ['Training'] * n_stories * 2 + ['Test'] * 14,
-                'Condition': len(e_hat) * [cond], 
-                'batch': len(e_hat) * [ii],
-                'New Event': get_new_event_prob(e_hat),
-                'Total N Events': get_total_n_events(e_hat),
-                't': list(range(len(e_hat))),
-                'Schema Repeats': schema_repeats,
-            }))
-
-
-
-            prediction_err.append(pd.DataFrame({
-                'Wedding': list(np.reshape([[kk] * 5 for kk in range(38)], -1)), 
-                'Condition': 190 *[cond],
-                'batch': [ii] * 190,
-                't': list(range(5)) * (n_stories * 2 + 14),
-                'Trials': ['Training'] * n_stories * 2 * 5 + ['Test'] * 14 * 5,
-                'pe': pes,
-                'Schema Repeats': [ii for ii in schema_repeats for _ in range(5)],
-                'Schema Repeats (Inferred)': [ii for ii in schema_reps_inferred for _ in range(5)],
-                'verb Accuracy': decoding_acc,
-                'verb Accuracy Prob': decoding_prob_corr,
-                'verb Accuracy (gaus)': decoding_acc_gaus,
-                'verb Accuracy Prob (gaus)': decoding_prob_corr_gaus,
-            }))
-
-            # clear_sem(sem_model)
-            sem_model = None
-
-
-    return pd.DataFrame(results), pd.concat(boundaries), pd.concat(new_event), pd.concat(prediction_err)
+    
+    return 
 
 """## Story parameters"""
 
@@ -760,12 +673,14 @@ gibbs_kwargs = dict(
 epsilon_e = 0.25
 
 """# Run model"""
-
-results, boundaries, new_event, prediction_err = batch_exp_balanced_mem(
+batch_exp(
     sem_kwargs, story_kwargs, gibbs_kwargs, n_batch=n_batch, reconstruct=False)
 
+# results, boundaries, new_event, prediction_err = batch_exp_balanced_mem(
+#     sem_kwargs, story_kwargs, gibbs_kwargs, n_batch=n_batch, reconstruct=False)
 
-results.to_pickle('SilvyTask_results.pkl')
-boundaries.to_pickle('SilvyTask_boundaries.pkl')
-new_event.to_pickle('SilvyTask_new_event.pkl')
-prediction_err.to_pickle('SilvyTask_prediction_err.pkl')
+
+# results.to_pickle('SilvyTask_results.pkl')
+# boundaries.to_pickle('SilvyTask_boundaries.pkl')
+# new_event.to_pickle('SilvyTask_new_event.pkl')
+# prediction_err.to_pickle('SilvyTask_prediction_err.pkl')

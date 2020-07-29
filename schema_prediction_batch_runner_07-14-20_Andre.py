@@ -2,7 +2,7 @@ import numpy as np
 from schema_prediction_task_7_14_20 import generate_exp, batch_exp
 import time, tqdm, os
 
-output_file_path = './json_files_v071420/'
+output_file_path = './json_files_v071420_Andre/'
 
 def make_kw_string(kwargs):
     kw_string = ''
@@ -32,7 +32,7 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
         "source activate schema",
         "cd ~/SchemaPrediction",
         "pip install -r requirements.txt &> ./logs/sem_install.log",
-        "python -u job_v071420.py {kw_string} &> ./logs/{tag}c.log".format(kw_string=kw_string, tag=tag),
+        "python -u job_v071420_Andre.py {kw_string} &> ./logs/{tag}c.log".format(kw_string=kw_string, tag=tag),
         "sleep 10",
     ]
 
@@ -73,42 +73,14 @@ if __name__ == "__main__":
 
     # n_epochs_ = [int(ii) for ii in np.logspace(1.2, 1.5, base=10, num=10)]
     n_epochs_ = [8, 11, 16, 23, 32, 45, 64, 91, 128]
-    log_lambdas = [5.0, 7., 10., 13., 18., 24., 33., 45.,]
+    # log_lambdas = [5.0, 7., 10., 13., 18., 24., 33., 45.,]
+    log_lambdas = [-10, -7., -5, -2.5, 0, 2.5]
 
-    n_batch = 2
+    n_batch = 1
 
     list_kwargs = []
 
-    # for no_split in [False]:
-    #     for LSTM in [False]:
-    #         for mixed in [False]:
-    #             for epsilon in epsilons:
-    #                 for lr in lrs:
-    #                     for n_epochs in n_epochs_:
-    #                         for log_alpha in log_alphas:
-    #                             for log_lambda in log_lambdas:
-    #                                 for b in range(n_batch):
-    #                                     kwargs = dict(
-    #                                         no_split=no_split,
-    #                                         LSTM=LSTM,
-    #                                         epsilon=epsilon,
-    #                                         lr=lr,
-    #                                         n_epochs=n_epochs,
-    #                                         log_alpha=log_alpha,
-    #                                         log_lambda=log_lambda,
-    #                                         batch_n=b,
-    #                                         batch_update=batch_update,
-    #                                         actor_weight=0.0,
-    #                                         mixed=mixed
-    #                                     )
-    #                                     list_kwargs.append(kwargs)
-
-    log_alphas = [-208]
-    log_lambdas = [208]
-
-    n_batch = 25
-    
-    for no_split in [True]:
+    for no_split in [False]:
         for LSTM in [False]:
             for mixed in [False]:
                 for epsilon in epsilons:
@@ -132,6 +104,35 @@ if __name__ == "__main__":
                                         )
                                         list_kwargs.append(kwargs)
 
+    # log_alphas = [-208]
+    # log_lambdas = [208]
+
+    # n_batch = 12
+    
+    # for no_split in [True]:
+    #     for LSTM in [False]:
+    #         for mixed in [False]:
+    #             for epsilon in epsilons:
+    #                 for lr in lrs:
+    #                     for n_epochs in n_epochs_:
+    #                         for log_alpha in log_alphas:
+    #                             for log_lambda in log_lambdas:
+    #                                 for b in range(n_batch):
+    #                                     kwargs = dict(
+    #                                         no_split=no_split,
+    #                                         LSTM=LSTM,
+    #                                         epsilon=epsilon,
+    #                                         lr=lr,
+    #                                         n_epochs=n_epochs,
+    #                                         log_alpha=log_alpha,
+    #                                         log_lambda=log_lambda,
+    #                                         batch_n=b,
+    #                                         batch_update=batch_update,
+    #                                         actor_weight=0.0,
+    #                                         mixed=mixed
+    #                                     )
+    #                                     list_kwargs.append(kwargs)
+
 
     # randomize the simulation order for effective sampling speed 
     # (i.e. intermediate progress is more meaningful)
@@ -145,12 +146,12 @@ if __name__ == "__main__":
     # for kwarg in list_kwargs:
     #     print(make_kw_string(kwarg))
         
-    # # create the slurm submissions 
-    # for ii, kwargs in enumerate(list_kwargs):
-    #     print('Submitting job {} of {}'.format(ii + 1, n))
-    #     make_slurm_shell(kwargs, filename="_slurm.sh")
+    # create the slurm submissions 
+    for ii, kwargs in enumerate(list_kwargs):
+        print('Submitting job {} of {}'.format(ii + 1, n))
+        make_slurm_shell(kwargs, filename="_slurm.sh")
 
-    #     os.system('sbatch _slurm.sh')
-    #     time.sleep(0.1)
-    #     os.remove('_slurm.sh')
+        os.system('sbatch _slurm.sh')
+        time.sleep(0.1)
+        os.remove('_slurm.sh')
 

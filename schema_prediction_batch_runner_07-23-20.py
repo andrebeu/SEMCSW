@@ -1,8 +1,8 @@
 import numpy as np
-from schema_prediction_task_7_14_20 import generate_exp, batch_exp
+from schema_prediction_task_7_22_20 import generate_exp, batch_exp
 import time, tqdm, os
 
-output_file_path = './json_files_v071420/'
+output_file_path = './json_files_v072220/'
 
 def make_kw_string(kwargs):
     kw_string = ''
@@ -32,7 +32,7 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
         "source activate schema",
         "cd ~/SchemaPrediction",
         "pip install -r requirements.txt &> ./logs/sem_install.log",
-        "python -u job_v071420.py {kw_string} &> ./logs/{tag}c.log".format(kw_string=kw_string, tag=tag),
+        "python -u job_v072220.py {kw_string} &> ./logs/{tag}c.log".format(kw_string=kw_string, tag=tag),
         "sleep 10",
     ]
 
@@ -79,29 +79,29 @@ if __name__ == "__main__":
 
     list_kwargs = []
 
-    # for no_split in [False]:
-    #     for LSTM in [False]:
-    #         for mixed in [False]:
-    #             for epsilon in epsilons:
-    #                 for lr in lrs:
-    #                     for n_epochs in n_epochs_:
-    #                         for log_alpha in log_alphas:
-    #                             for log_lambda in log_lambdas:
-    #                                 for b in range(n_batch):
-    #                                     kwargs = dict(
-    #                                         no_split=no_split,
-    #                                         LSTM=LSTM,
-    #                                         epsilon=epsilon,
-    #                                         lr=lr,
-    #                                         n_epochs=n_epochs,
-    #                                         log_alpha=log_alpha,
-    #                                         log_lambda=log_lambda,
-    #                                         batch_n=b,
-    #                                         batch_update=batch_update,
-    #                                         actor_weight=0.0,
-    #                                         mixed=mixed
-    #                                     )
-    #                                     list_kwargs.append(kwargs)
+    for no_split in [False]:
+        for LSTM in [False]:
+            for mixed in [False]:
+                for epsilon in epsilons:
+                    for lr in lrs:
+                        for n_epochs in n_epochs_:
+                            for log_alpha in log_alphas:
+                                for log_lambda in log_lambdas:
+                                    for b in range(n_batch):
+                                        kwargs = dict(
+                                            no_split=no_split,
+                                            LSTM=LSTM,
+                                            epsilon=epsilon,
+                                            lr=lr,
+                                            n_epochs=n_epochs,
+                                            log_alpha=log_alpha,
+                                            log_lambda=log_lambda,
+                                            batch_n=b,
+                                            batch_update=batch_update,
+                                            actor_weight=0.0,
+                                            mixed=mixed
+                                        )
+                                        list_kwargs.append(kwargs)
 
     log_alphas = [-208]
     log_lambdas = [208]
@@ -145,12 +145,12 @@ if __name__ == "__main__":
     # for kwarg in list_kwargs:
     #     print(make_kw_string(kwarg))
         
-    # # create the slurm submissions 
-    # for ii, kwargs in enumerate(list_kwargs):
-    #     print('Submitting job {} of {}'.format(ii + 1, n))
-    #     make_slurm_shell(kwargs, filename="_slurm.sh")
+    # create the slurm submissions 
+    for ii, kwargs in enumerate(list_kwargs):
+        print('Submitting job {} of {}'.format(ii + 1, n))
+        make_slurm_shell(kwargs, filename="_slurm.sh")
 
-    #     os.system('sbatch _slurm.sh')
-    #     time.sleep(0.1)
-    #     os.remove('_slurm.sh')
+        os.system('sbatch _slurm.sh')
+        time.sleep(0.1)
+        os.remove('_slurm.sh')
 

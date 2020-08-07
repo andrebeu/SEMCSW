@@ -20,7 +20,7 @@ batch_size        = 25.0
 
 def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
     log_lambda=0.0, n_hidden=10, epsilon=1e-5, no_split=False,
-     batch_n=0, LSTM=False, batch_update=True, actor_weight=1.0, mixed=False):
+     n_batches=0, LSTM=False, batch_update=True, actor_weight=1.0, mixed=False):
     """ 
     :param n_epochs:    int     (28)
     :param batch_size:  int     (25)
@@ -65,12 +65,12 @@ def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
         tag += '_mixed'
 
     # for now, we only consider the basic blocked vs interleaved set up
-    json_tag = '_{}_nhidden{}_e{}_lr{}_n{}_d{}_logalfa_{}_loglmda_{}_batch_{}{}'.format(
-        model, n_hidden, epsilon, lr, n_epochs, dropout, log_alpha, log_lambda, batch_n, tag)
+    json_tag = '_{}_nhidden{}_e{}_lr{}_n{}_d{}_logalfa_{}_loglmda_{}_{}'.format(
+        model, n_hidden, epsilon, lr, n_epochs, dropout, log_alpha, log_lambda, tag)
 
     # run a single batch
     _ = batch_exp(
-        sem_kwargs, story_kwargs, n_batch=1, sem_progress_bar=True,
+        sem_kwargs, story_kwargs, n_batch=n_batches, sem_progress_bar=True,
         progress_bar=False, block_only=False,
         run_mixed=mixed, 
         save_to_json=True,
@@ -84,7 +84,7 @@ def parse_args(args):
     # these are the defaults for the function
     main_kwargs = dict(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
     log_lambda=0.0, n_hidden=10, epsilon=1e-5, no_split=False,
-    batch_n=0, LSTM='False', batch_update='True', actor_weight=1.0, mixed='False')
+    n_batches=8, LSTM='False', batch_update='True', actor_weight=1.0, mixed='False')
 
     for arg in args:
         k = arg.split("=")[0]
@@ -105,7 +105,7 @@ def parse_args(args):
     main_kwargs['n_hidden']     = int(float(main_kwargs['n_hidden']))
     main_kwargs['epsilon']      = float(main_kwargs['epsilon'])
     main_kwargs['no_split']     = main_kwargs['no_split'] == 'True'
-    main_kwargs['batch_n']      = int(float(main_kwargs['batch_n']))
+    main_kwargs['n_batches']    = int(float(main_kwargs['n_batches']))
     main_kwargs['LSTM']         = main_kwargs['LSTM'] == 'True'
     main_kwargs['batch_update'] = main_kwargs['batch_update'] == 'True'
     main_kwargs['actor_weight'] = float(main_kwargs['actor_weight'])

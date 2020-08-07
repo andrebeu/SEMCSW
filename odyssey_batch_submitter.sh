@@ -14,13 +14,13 @@ cd ~/SchemaPrediction
 rm ~/SchemaPrediction/logs/*
 rm ~/SchemaPrediction/slurm_output/*
 rm ~/SchemaPrediction/json_files_v071420/*
-rm ~/SchemaPrediction/json_files_v072220/*
-pip install -r requirements.txt &> ./logs/sem_install.log
+rm ~/SchemaPrediction/json_files_v071420_MLP/*
+# pip install -r requirements.txt &> ./logs/sem_install.log
 
 # sleep 5h
 
 # python -u schema_prediction_batch_runner_07-14-20_Andre.py &> ./logs/batch_submitter_2.log
 # python -u schema_prediction_batch_runner_07-22-20_customGRU.py &> ./logs/batch_submitter_1.log
-python -u schema_prediction_batch_runner_07-14-20_MLP.py &> ./logs/batch_submitter_0.log
+python -u schema_prediction_batch_runner_08-03-20.py &> ./logs/batch_submitter_0.log
 
 sleep 10

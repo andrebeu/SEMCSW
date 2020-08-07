@@ -8,8 +8,11 @@
 #SBATCH -e slurm_output/slurm.%N.%j.err # STDERR
 
 module load Anaconda3/2019.10
-source activate schema
+conda create --name rbaooituveqguuz -y
+source activate rbaooituveqguuz
 cd ~/SchemaPrediction
 pip install -r requirements.txt &> ./logs/sem_install.log
-python -u job_v072220.py no_split=False LSTM=False epsilon=1e-05 lr=0.005 n_epochs=91 log_alpha=-2.0 log_lambda=18.0 batch_n=0 batch_update=False actor_weight=0.0 mixed=False  &> ./logs/_no_split=False_LSTM=False_epsilon=1e-05_lr=0.005_n_epochs=91_log_alpha=-2.0_log_lambda=18.0_batch_n=0_batch_update=False_actor_weight=0.0_mixed=False_c.log
+python -u job_v071420_MLP.py no_split=False LSTM=False epsilon=1e-05 lr=0.001 n_epochs=16 log_alpha=8.0 log_lambda=13.0 batch_n=0 batch_update=False actor_weight=0.0 mixed=False  &> ./logs/_no_split=False_LSTM=False_epsilon=1e-05_lr=0.001_n_epochs=16_log_alpha=8.0_log_lambda=13.0_batch_n=0_batch_update=False_actor_weight=0.0_mixed=False_c.log
+sleep 10
+conda remove --name rbaooituveqguuz --all -y
 sleep 10

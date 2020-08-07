@@ -1,8 +1,8 @@
 import numpy as np
-from schema_prediction_task_7_14_20 import generate_exp, batch_exp
+from schema_prediction_task_8_3_20 import generate_exp, batch_exp
 import time, tqdm, os
 
-output_file_path = './json_files_v071420_MLP/'
+output_file_path = './json_files_v080320/'
 
 import random, string
 def get_random_string(length):
@@ -22,7 +22,7 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
     tag = ''
     for s in kw_string.split(' '):
         tag += '_' + s
-
+    
     # generate a random name of a conda enviornment
     conda_name = 'temp_' + get_random_string(4)  
 
@@ -42,7 +42,7 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
         "source activate {}".format(conda_name),
         "cd ~/SchemaPrediction",
         "pip install -r requirements.txt &> ./logs/sem_install_{}.log".format(conda_name),
-        "python -u job_v071420_MLP.py {kw_string} &> ./logs/{tag}c.log".format(kw_string=kw_string, tag=tag),
+        "python -u job_v080320.py {kw_string} &> ./logs/{tag}c.log".format(kw_string=kw_string, tag=tag),
         "sleep 10",
         "conda deactivate",
         "conda remove --name {} --all -y".format(conda_name),
@@ -90,7 +90,7 @@ if __name__ == "__main__":
     log_lambdas = [-2.5, 0, 2.5, 5.0, 7., 10., 13., 18., 24., 33.]
     # log_lambdas = [-10, -7., -5, -2.5, 0, 2.5]
 
-    n_batches = 8
+    n_batches = 4
 
     list_kwargs = []
 
@@ -110,7 +110,7 @@ if __name__ == "__main__":
                                         n_epochs=n_epochs,
                                         log_alpha=log_alpha,
                                         log_lambda=log_lambda,
-                                    n_batches=n_batches,
+                                        n_batches=n_batches,
                                         batch_update=batch_update,
                                         actor_weight=0.0,
                                         mixed=mixed

@@ -1,9 +1,10 @@
 import numpy as np
-from schema_prediction_task_7_14_20 import generate_exp, batch_exp
-from sem.event_models import NonLinearEvent
+from schema_prediction_task_8_3_20 import generate_exp, batch_exp
+from andreRNN import AndreRNN
+# from custom_event_models import GRUEvent, LSTMEvent
 
 
-output_file_path = './json_files_v071420_MLP/'
+output_file_path = './json_files_v080320/'
 
 ## sem parameters
 dropout           = 0.0
@@ -35,8 +36,8 @@ def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
     given a set of parameters
     """
 
-    f_class = NonLinearEvent
-    model = 'MLP'
+    f_class = AndreRNN
+    model = 'AndreRNN'
 
     # set the kwargs for the story
     story_kwargs = dict(seed=None, actor_weight=actor_weight)

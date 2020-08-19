@@ -68,7 +68,7 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
 
 if __name__ == "__main__":
 
-    output_file_path = './json_files_v081920_MLP/'
+    output_file_path = './json_files_v081920_Inf_LSTM/'
     
     #online version or batch update?
     batch_update = False
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     mixed = True
 
     # run the LSTM version or the MLP?
-    LSTM = False
+    LSTM = True
 
     # Save the Prediction error and boundary info? (storage intensive)
     results_only = True
@@ -93,9 +93,8 @@ if __name__ == "__main__":
     # lrs = [np.round(ii*10**-4,4) for ii in range(5, 10, 2)] + \
     #     [np.round(ii*10**-3,3) for ii in range(1, 7, 2)]
     # lrs = [np.round(ii*10**-4,4) for ii in range(5, 10, 2)] + [0.001]
-    lrs = [0.0005, 0.0006, 0.0007, 0.0008, 0.0009, 0.001,
-        0.002, 0.003, 0.004, 0.005]
-    n_epochs_ = [4, 6, 8, 10, 12, 14, 16, 20, 24, 32]
+    lrs = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1]
+    n_epochs_ = [1, 2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 20]
 
     log_alphas = [-9, -3, 0, 3, 9]
     log_lambdas = [0, 4, 8.0, 12., 16., 24., 32.]

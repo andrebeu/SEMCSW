@@ -26,7 +26,7 @@ from scipy.special import logsumexp
 # parent_path = os.path.dirname(current_path)
 # sys.path.append(parent_path)
 
-from sem_schemapred_probeaggregate import sem_run_with_boundaries, SEM
+from sem import sem_run_with_boundaries, SEM
 from sem.hrr import plate_formula, encode, decode, embed_gaussian
 from sem.utils import fast_mvnorm_diagonal_logprob, get_prior_scale, processify
 from no_split_sem import no_split_sem_run_with_boundaries, NoSplitSEM
@@ -440,7 +440,7 @@ def score_results(results, e, y, n_train=160, n_test=40):
 def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, progress_bar=True,
     sem_progress_bar=False, block_only=False, interleaved_only=False, aggregator=np.sum, run_mixed=False, 
     debug=False, save_to_json=False, json_tag='', json_file_path='./', no_split=False, normalize=False,
-    results_only=False):   
+    results_only=True):
     """
     :param sem_kwargs: (dictionary)
     :param stories_kwargs: (dictionary) 
@@ -489,9 +489,6 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
 
         if not no_split:
             results = sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
-            # sem_model = SEM(**sem_kwargs)
-            # sem_model.run_w_boundaries(x, save_x_hat=True, progress_bar=sem_progress_bar)
-            # results = sem_model
         else:
             results = no_split_sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
         results.x_orig = np.concatenate(x)

@@ -9,7 +9,7 @@ run(){
     # ssh -i ~/Documents/AWS/frankly.pem.txt $1@$2 "mkdir SchemaPrediction"
     # ssh -i ~/Documents/AWS/frankly.pem.txt $1@$2 "mkdir SchemaPrediction/json_files"
     # scp -r ~/Projects/SchemaPrediction/*py $1@$2:~/SchemaPrediction/
-    rsync -a requirements.txt *py odyssey_batch_submitter.sh --exclude="*.json" $1@$2:~/SchemaPrediction/
+    rsync -a requirements.txt *py *.sh --exclude="*.json" $1@$2:~/SchemaPrediction/
 }
 
 username="nfranklin"

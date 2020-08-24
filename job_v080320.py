@@ -57,6 +57,7 @@ def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
         l2_regularization=l2_regularization, 
         n_epochs=n_epochs,
         optimizer_kwargs=optimizer_kwargs,
+        n_hidden=n_hidden,
         )
     sem_kwargs = dict(lmda=np.exp(log_lambda), alfa=np.exp(log_alpha), f_opts=f_opts, f_class=f_class)
 

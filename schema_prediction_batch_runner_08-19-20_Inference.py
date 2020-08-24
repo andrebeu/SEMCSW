@@ -2,7 +2,7 @@ import numpy as np
 import time, os
 import random, string
 
-job_file = 'job_v081920.py'
+job_file = 'job_v080320.py'
 
 def get_random_string(length):
     letters = string.ascii_lowercase
@@ -44,16 +44,17 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
         "#SBATCH -e slurm_output/slurm.%N.%j.err # STDERR",
         "",
         "module load Anaconda3/2019.10",
-        "conda create --name {} -y".format(conda_name),
-        "source activate {}".format(conda_name),
+        # "conda create --name {} -y".format(conda_name),
+        # "source activate {}".format(conda_name),
+        "source activate schema",
         "cd ~/SchemaPrediction",
         "pip install -r requirements.txt &> ./logs/sem_install_{}.log".format(conda_name),
         "python -u {file} {kw_string} &> ./logs/{tag}c.log".format(
             file=job_file, kw_string=kw_string, tag=tag),
-        "sleep 10",
-        "conda deactivate",
-        "conda remove --name {} --all -y".format(conda_name),
-        "rm -rf ~/.conda/envs/{}".format(conda_name),
+        # "sleep 10",
+        # "conda deactivate",
+        # "conda remove --name {} --all -y".format(conda_name),
+        # "rm -rf ~/.conda/envs/{}".format(conda_name),
         "sleep 10",
     ]
 
@@ -68,7 +69,7 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
 
 if __name__ == "__main__":
 
-    output_file_path = './json_files_v081920_Inf_LSTM/'
+    output_file_path = './json_files_v081920_Inf_LSTM_d082420/'
     
     #online version or batch update?
     batch_update = False
@@ -158,12 +159,12 @@ if __name__ == "__main__":
     # for kwarg in list_kwargs:
     #     print(make_kw_string(kwarg))
         
-    # create the slurm submissions 
-    for ii, kwargs in enumerate(list_kwargs):
-        print('Submitting job {} of {}'.format(ii + 1, n))
-        make_slurm_shell(kwargs, filename="_slurm.sh")
+    # # create the slurm submissions 
+    # for ii, kwargs in enumerate(list_kwargs):
+    #     print('Submitting job {} of {}'.format(ii + 1, n))
+    #     make_slurm_shell(kwargs, filename="_slurm.sh")
 
-        os.system('sbatch _slurm.sh')
-        time.sleep(0.1)
-        os.remove('_slurm.sh')
+    #     os.system('sbatch _slurm.sh')
+    #     time.sleep(0.1)
+    #     os.remove('_slurm.sh')
 

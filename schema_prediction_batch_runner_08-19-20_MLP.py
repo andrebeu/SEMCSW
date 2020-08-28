@@ -1,6 +1,8 @@
 import numpy as np
 import time, os
 import random, string
+import pandas as pd
+from tqdm import tqdm
 
 job_file = 'job_v081920.py'
 
@@ -159,15 +161,74 @@ if __name__ == "__main__":
     print(lrs)
     print(log_alphas)
     print(log_lambdas)
-    # for kwarg in list_kwargs:
-    #     print(make_kw_string(kwarg))
-        
-    # create the slurm submissions 
-    for ii, kwargs in enumerate(list_kwargs):
-        print('Submitting job {} of {}'.format(ii + 1, n))
-        make_slurm_shell(kwargs, filename="_slurm.sh")
 
-        os.system('sbatch _slurm.sh')
-        time.sleep(0.25)
-        os.remove('_slurm.sh')
+    # hard coded at this point
+    dropout = 0.0
+
+    batch_mean = np.mean([ii for ii in range(n_batches)])
+
+    temp_list_kwargs = []
+    for kwarg in tqdm(list_kwargs, total=len(list_kwargs)):
+
+        tag = ''
+        if kwarg['no_split']:
+            tag += '_nosplit'
+        if kwarg['batch_update'] == False:
+            tag += '_online' 
+
+        if kwarg['mixed']:
+            tag += '_mixed'
+
+        if LSTM:
+            model = 'VanillaLSTM'
+        else: 
+            model = 'MLP'
+
+        json_tag = '_{}_nhidden{}_e{}_lr{}_n{}_d{}_logalfa_{}_loglmda_{}_{}'.format(
+            model, kwargs['n_hidden'], kwargs['epsilon'], kwargs['lr'],
+            kwargs['n_epochs'], dropout, float(kwargs['log_alpha']), kwargs['log_lambda'],
+            tag)
+        file_name = '{}results{}.json'.format(output_file_path, json_tag)
+        if os.path.exists(file_name):
+
+            # check the file to see if it is complete
+            _res = pd.read_json(file_name)
+
+            conditions = set(_res.Condition)
+            if conditions != {'Blocked', 'Early', 'Interleaved', 'Late', 'Middle'}:
+                # print(conditions)
+                temp_list_kwargs.append(kwarg)
+                
+            elif not np.all(_res.groupby('Condition').mean().batch == batch_mean):
+                # print(_res.groupby('Condition').mean().batch)
+                # print(file_name)
+                # raise
+                temp_list_kwargs.append(kwarg)
+
+
+        else:
+            temp_list_kwargs.append(kwarg)
+
+    print("{} of {} simulations already compete".format(len(list_kwargs) - len(temp_list_kwargs), len(list_kwargs)))
+    list_kwargs = temp_list_kwargs
+    print("Submitting remaining {} jobs".format(len(list_kwargs)))
+
+
+
+
+        # print(file_name, )
+
+        
+    # '{}results{}.json'
+
+
+    
+    # # create the slurm submissions 
+    # for ii, kwargs in enumerate(list_kwargs):
+    #     print('Submitting job {} of {}'.format(ii + 1, n))
+    #     make_slurm_shell(kwargs, filename="_slurm.sh")
+
+    #     os.system('sbatch _slurm.sh')
+    #     time.sleep(0.25)
+    #     os.remove('_slurm.sh')
 

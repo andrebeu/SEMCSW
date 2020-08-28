@@ -15,8 +15,8 @@ run(){
     # rsync -rav $1@$2:~/SchemaPrediction/json_files_v061020_online/ ./json_files_v061020_online/
     # rsync -rav $1@$2:~/SchemaPrediction/json_files_v061020/ ./json_files_v061020_highlr/
     # rsync -rav $1@$2:~/SchemaPrediction/json_files_v071420/ ./json_files_v071420_v4/
-    rsync -rav $1@$2:~/SchemaPrediction/json_files_v081920_MLP_d082420/ ./json_files_v081920_MLP_d082420/
-    # rsync -rav $1@$2:~/SchemaPrediction/json_files_v081920_Inf_LSTM/ ./json_files_v081920_Inf_LSTM/
+    rsync -rav $1@$2:~/SchemaPrediction/json_files_v081920_MLP_d082620/ ./json_files_v081920_MLP_d082620/
+    rsync -rav $1@$2:~/SchemaPrediction/json_files_v081920_LSTM_d082520/ ./json_files_v081920_LSTM_d082520/
 
 }
 

@@ -18,7 +18,7 @@ batch_size        = 25.0
 
 def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
     log_lambda=0.0, n_hidden=10, epsilon=1e-5, no_split=False,
-     n_batches=0, LSTM=False, batch_update=True, actor_weight=1.0, mixed=False,
+     batch_num=0, LSTM=False, batch_update=True, actor_weight=1.0, mixed=False,
      output_file_path='./json_files/', results_only=False):
     """ 
     :param n_epochs:    int     (28)
@@ -72,8 +72,8 @@ def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
         tag += '_mixed'
 
     # for now, we only consider the basic blocked vs interleaved set up
-    json_tag = '_{}_nhidden{}_e{}_lr{}_n{}_d{}_logalfa_{}_loglmda_{}_{}'.format(
-        model, n_hidden, epsilon, lr, n_epochs, dropout, log_alpha, log_lambda, tag)
+    json_tag = '_{}_nhidden{}_e{}_lr{}_n{}_d{}_logalfa_{}_loglmda_{}_batch_{}{}'.format(
+        model, n_hidden, epsilon, lr, n_epochs, dropout, log_alpha, log_lambda, batch_n, tag)
 
     # run a single batch
     _ = batch_exp(
@@ -92,7 +92,7 @@ def parse_args(args):
     # these are the defaults for the function
     main_kwargs = dict(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
     log_lambda=0.0, n_hidden=10, epsilon=1e-5, no_split=False,
-    n_batches=8, LSTM='False', batch_update='True', actor_weight=1.0, mixed='False',
+    batch_n=0, LSTM='False', batch_update='True', actor_weight=1.0, mixed='False',
     output_file_path='./json_files/', results_only=False)
 
     for arg in args:
@@ -117,7 +117,7 @@ def parse_args(args):
         main_kwargs['n_hidden']     = int(float(main_kwargs['n_hidden']))
     main_kwargs['epsilon']      = float(main_kwargs['epsilon'])
     main_kwargs['no_split']     = main_kwargs['no_split'] == 'True'
-    main_kwargs['n_batches']    = int(float(main_kwargs['n_batches']))
+    main_kwargs['batch_n']        = int(main_kwargs['batch_n'])
     main_kwargs['LSTM']         = main_kwargs['LSTM'] == 'True'
     main_kwargs['batch_update'] = main_kwargs['batch_update'] == 'True'
     main_kwargs['actor_weight'] = float(main_kwargs['actor_weight'])

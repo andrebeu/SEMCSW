@@ -1,8 +1,10 @@
 import numpy as np
 import time, os
 import random, string
+import pandas as pd
+from tqdm import tqdm
 
-job_file = 'job_v080320.py'
+job_file = 'job_v081920.py'
 
 def get_random_string(length):
     letters = string.ascii_lowercase
@@ -68,7 +70,7 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
 
 if __name__ == "__main__":
 
-    output_file_path = './json_files_v081920_LSTM_d082520/'
+    output_file_path = './json_files_v081920_MLP_d082620/'
     
     #online version or batch update?
     batch_update = False
@@ -77,7 +79,7 @@ if __name__ == "__main__":
     mixed = True
 
     # run the LSTM version or the MLP?
-    LSTM = True
+    LSTM = False
 
     # Save the Prediction error and boundary info? (storage intensive)
     results_only = True
@@ -90,77 +92,68 @@ if __name__ == "__main__":
     # but this is in the set that includes max clustering performance (cf. SchemaPrediction v071420; pre-run)
 
     # extensive testing shows that a good learning rate is an order of magnitiude arround 1e-3 
-    # lrs = [np.round(ii*10**-4,4) for ii in range(5, 10, 2)] + \
-    #     [np.round(ii*10**-3,3) for ii in range(1, 7, 2)]
-    # lrs = [np.round(ii*10**-4,4) for ii in range(5, 10, 2)] + [0.001]
-    # lrs =  [0.0005, 0.0006, 0.0007, 0.0008, 0.0009, 0.001, 0.0012, 0.0014,
-    #     0.0016, 0.002, 0.003, 0.004, 0.005]
-    # n_epochs_ = [4, 6, 8, 9, 10, 11, 12, 14, 16, 20, 24, 32]
-    lrs = [0.002, 0.0025, 0.003, 0.004, 0.005, 0.006, 0.008, 0.01, 0.0125,
-        0.016, 0.02, 0.025, 0.03, 0.04, 0.05]
-    n_epochs_ = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12]
+    parameters = pd.read_csv('MLPcandidateparams.csv')
 
-    log_alphas = [-9, -3, 0, 3, 9]
-    log_lambdas = [-4, 0, 2.0, 4., 6.0, 8.0, 10, 12., 16., 24., 32.]
-    
     # How many batches per simulation? Should be kept low for parameter searches
-    n_batches = 8
+    n_batches = 100
 
     list_kwargs = []
 
-    for epsilon in epsilons:
-        for lr in lrs:
-            for n_epochs in n_epochs_:
-                for log_alpha in log_alphas:
-                    for log_lambda in log_lambdas:
-                        kwargs = dict(
-                            no_split=False,
-                            LSTM=LSTM,
-                            epsilon=epsilon,
-                            lr=lr,
-                            n_epochs=n_epochs,
-                            n_hidden=n_hidden,
-                            log_alpha=log_alpha,
-                            log_lambda=log_lambda,
-                            n_batches=n_batches,
-                            batch_update=batch_update,
-                            actor_weight=0.0,
-                            mixed=mixed,
-                            output_file_path=output_file_path,
-                            results_only=results_only,
-                        )
-                        list_kwargs.append(kwargs)
+    epsilon = epsilons[0]
 
-                    # append the No-Split SEM simulations
-                    kwargs = dict(
-                        no_split=True,
-                        LSTM=LSTM,
-                        epsilon=epsilon,
-                        lr=lr,
-                        n_epochs=n_epochs,
-                        n_hidden=n_hidden,
-                        log_alpha=log_alpha,
-                        log_lambda=log_lambda,
-                        n_batches=n_batches,
-                        batch_update=batch_update,
-                        actor_weight=0.0,
-                        mixed=mixed,
-                        output_file_path=output_file_path,
-                        results_only=results_only,
-                    )
-                    list_kwargs.append(kwargs)
+    for idx in parameters.index:
+        lr          = parameters.loc[idx, 'lr']
+        n_epochs    = parameters.loc[idx, 'n_epochs']
+        log_alpha   = parameters.loc[idx, 'logalpha']
+        log_lambda  = parameters.loc[idx, 'loglamda']
+
+        kwargs = dict(
+            no_split=False,
+            LSTM=LSTM,
+            epsilon=epsilon,
+            lr=lr,
+            n_epochs=n_epochs,
+            n_hidden=n_hidden,
+            log_alpha=log_alpha,
+            log_lambda=log_lambda,
+            n_batches=n_batches,
+            batch_update=batch_update,
+            actor_weight=0.0,
+            mixed=mixed,
+            output_file_path=output_file_path,
+            results_only=results_only,
+        )
+        list_kwargs.append(kwargs)
+
+        # append the No-Split SEM simulations
+        kwargs = dict(
+            no_split=True,
+            LSTM=LSTM,
+            epsilon=epsilon,
+            lr=lr,
+            n_epochs=n_epochs,
+            n_hidden=n_hidden,
+            log_alpha=-208,
+            log_lambda=208,
+            n_batches=n_batches,
+            batch_update=batch_update,
+            actor_weight=0.0,
+            mixed=mixed,
+            output_file_path=output_file_path,
+            results_only=results_only,
+        )
+        list_kwargs.append(kwargs)
 
     # randomize the simulation order for effective sampling speed 
     # (i.e. intermediate progress is more meaningful)
     list_kwargs = np.random.permutation(list_kwargs)
     n = len(list_kwargs)
     print(n)
-    print(n_epochs_)
-    print(lrs)
-    print(log_alphas)
-    print(log_lambdas)
+    print(parameters)
 
 
+
+    
     # create the slurm submissions 
     for ii, kwargs in enumerate(list_kwargs):
         print('Submitting job {} of {}'.format(ii + 1, n))

@@ -7,6 +7,6 @@
 #SBATCH -o slurm_output/slurm.%N.%j.out # STDOUT
 #SBATCH -e slurm_output/slurm.%N.%j.err # STDERR
 
-rm -rf ~/.conda/envs/*
+rm -rf ~/.conda/envs/temp_*
 
 sleep 10

@@ -47,7 +47,7 @@ def logsumexp_mean(x):
     """ return the log of the mean, given a 1-d array of log values"""
     return logsumexp(x) - np.log(len(x))
 
-def generate_exp(condition, seed=None, err=0.1, n_train=80, n_test=40, embedding_library=None, 
+def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embedding_library=None, 
                     actor_weight=1.0):
     """
     :param condition: (str), either 'blocked', 'interleaved', 'early', 'middle', or 'late'

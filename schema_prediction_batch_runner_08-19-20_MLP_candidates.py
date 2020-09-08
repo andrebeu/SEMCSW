@@ -32,7 +32,6 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
 
 
     # generate a random name of a conda enviornment
-    conda_name = 'temp_' + get_random_string(4)  
 
     # these are the file lines we will have
     lines = [
@@ -46,16 +45,14 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
         "#SBATCH -e slurm_output/slurm.%N.%j.err # STDERR",
         "",
         "module load Anaconda3/2019.10",
-        "conda create --name {} -y".format(conda_name),
-        "source activate {}".format(conda_name),
+        "sleep 30",
+        "source activate schema",
         "cd ~/SchemaPrediction",
-        "pip install -r requirements.txt &> ./logs/sem_install_{}.log".format(conda_name),
         "python -u {file} {kw_string} &> ./logs/{tag}c.log".format(
             file=job_file, kw_string=kw_string, tag=tag),
         "sleep 10",
         "conda deactivate",
-        "conda remove --name {} --all -y".format(conda_name),
-        "rm -rf ~/.conda/envs/{}".format(conda_name),
+
         "sleep 10",
     ]
 
@@ -82,7 +79,7 @@ if __name__ == "__main__":
     LSTM = False
 
     # Save the Prediction error and boundary info? (storage intensive)
-    results_only = True
+    results_only = False
 
     # dont' change these.
     #   Extensive testing says these values are fine and relatively unimportant!
@@ -107,42 +104,44 @@ if __name__ == "__main__":
         log_alpha   = parameters.loc[idx, 'logalpha']
         log_lambda  = parameters.loc[idx, 'loglamda']
 
-        kwargs = dict(
-            no_split=False,
-            LSTM=LSTM,
-            epsilon=epsilon,
-            lr=lr,
-            n_epochs=n_epochs,
-            n_hidden=n_hidden,
-            log_alpha=log_alpha,
-            log_lambda=log_lambda,
-            n_batches=n_batches,
-            batch_update=batch_update,
-            actor_weight=0.0,
-            mixed=mixed,
-            output_file_path=output_file_path,
-            results_only=results_only,
-        )
-        list_kwargs.append(kwargs)
+        for b in range(n_batch):
 
-        # append the No-Split SEM simulations
-        kwargs = dict(
-            no_split=True,
-            LSTM=LSTM,
-            epsilon=epsilon,
-            lr=lr,
-            n_epochs=n_epochs,
-            n_hidden=n_hidden,
-            log_alpha=-208,
-            log_lambda=208,
-            n_batches=n_batches,
-            batch_update=batch_update,
-            actor_weight=0.0,
-            mixed=mixed,
-            output_file_path=output_file_path,
-            results_only=results_only,
-        )
-        list_kwargs.append(kwargs)
+            kwargs = dict(
+                no_split=False,
+                LSTM=LSTM,
+                epsilon=epsilon,
+                lr=lr,
+                n_epochs=n_epochs,
+                n_hidden=n_hidden,
+                log_alpha=log_alpha,
+                log_lambda=log_lambda,
+                batch_n=b,
+                batch_update=batch_update,
+                actor_weight=0.0,
+                mixed=mixed,
+                output_file_path=output_file_path,
+                results_only=results_only,
+            )
+            list_kwargs.append(kwargs)
+
+            # append the No-Split SEM simulations
+            kwargs = dict(
+                no_split=True,
+                LSTM=LSTM,
+                epsilon=epsilon,
+                lr=lr,
+                n_epochs=n_epochs,
+                n_hidden=n_hidden,
+                log_alpha=-208,
+                log_lambda=208,
+                batch_n=b,
+                batch_update=batch_update,
+                actor_weight=0.0,
+                mixed=mixed,
+                output_file_path=output_file_path,
+                results_only=results_only,
+            )
+            list_kwargs.append(kwargs)
 
     # randomize the simulation order for effective sampling speed 
     # (i.e. intermediate progress is more meaningful)

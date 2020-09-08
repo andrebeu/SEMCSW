@@ -11,8 +11,8 @@ module load Anaconda3/2019.10
 # conda create -n schema
 source activate schema
 cd ~/SchemaPrediction
-rm ~/SchemaPrediction/logs/*
-rm ~/SchemaPrediction/slurm_output/*
+# rm ~/SchemaPrediction/logs/*
+# rm ~/SchemaPrediction/slurm_output/*
 # rm ~/SchemaPrediction/json_files_v071420/*
 # rm ~/SchemaPrediction/json_files_v071420_MLP/*
 # rm ~/SchemaPrediction/json_files_v080320/*

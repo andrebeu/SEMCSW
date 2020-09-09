@@ -46,16 +46,13 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
         "#SBATCH -e slurm_output/slurm.%N.%j.err # STDERR",
         "",
         "module load Anaconda3/2019.10",
-        "conda create --name {} -y".format(conda_name),
-        "source activate {}".format(conda_name),
+        "sleep 30",
+        "source activate schema",
         "cd ~/SchemaPrediction",
-        "pip install -r requirements.txt &> ./logs/sem_install_{}.log".format(conda_name),
         "python -u {file} {kw_string} &> ./logs/{tag}c.log".format(
             file=job_file, kw_string=kw_string, tag=tag),
         "sleep 10",
         "conda deactivate",
-        "conda remove --name {} --all -y".format(conda_name),
-        "rm -rf ~/.conda/envs/{}".format(conda_name),
         "sleep 10",
     ]
 
@@ -105,7 +102,7 @@ if __name__ == "__main__":
     log_lambdas = [-32, -16, -8, -4, -2, 0, 2, 4, 8, 16, 32]
     
     # How many batches per simulation? Should be kept low for parameter searches
-    n_batches = 1
+    n_batches = 50
 
     list_kwargs = []
 

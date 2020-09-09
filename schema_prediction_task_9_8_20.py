@@ -451,7 +451,7 @@ def score_results(results, e, y, n_train=160, n_test=40, condensed=False):
             pe = 0
             for kk in [3, 4]:
                 scene_idx = (scenes % 5 == kk) & (scenes // 5 == t)
-                acc += float(decoding_prob_corr[scene_idx]) / 2.
+                acc += float(prob_corr_2afc[scene_idx]) / 2.
                 pe += float(pes[scene_idx]) / 2. 
             trial_by_trial.append(
                 {

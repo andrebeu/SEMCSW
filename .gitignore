@@ -1,5 +1,6 @@
 *.ipynb
 *.json
+*.csv
 .Notebooks_old/
 *.pdf
 *.svg
@@ -8,6 +9,10 @@ _slurm.sh
 *.png
 *.ipynb_checkpoints
 *.vscode
+*.xml
+*.iml
+.idea
+.idea/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

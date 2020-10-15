@@ -19,7 +19,7 @@ batch_size        = 25.0
 def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
     log_lambda=0.0, n_hidden=10, epsilon=1e-5, no_split=False,
      n_batches=0, LSTM=False, batch_update=True, actor_weight=1.0, mixed=False,
-     output_file_path='./json_files/', condensed_output=True):
+     output_file_path='./json_files/', condensed_output=True, instructed=False):
     """ 
     :param n_epochs:    int     (28)
     :param batch_size:  int     (25)
@@ -71,6 +71,9 @@ def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
     if mixed:
         tag += '_mixed'
 
+    if instructed:
+        tag += '_instructed'
+
     # for now, we only consider the basic blocked vs interleaved set up
     json_tag = '_{}_nhidden{}_e{}_lr{}_n{}_d{}_logalfa_{}_loglmda_{}_{}'.format(
         model, n_hidden, epsilon, lr, n_epochs, dropout, log_alpha, log_lambda, tag)
@@ -84,7 +87,8 @@ def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
         json_tag=json_tag,
         json_file_path=output_file_path, 
         no_split=no_split,
-        condensed_output=condensed_output)
+        condensed_output=condensed_output,
+        run_instructed=instructed)
 
 
 def parse_args(args):
@@ -93,7 +97,7 @@ def parse_args(args):
     main_kwargs = dict(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
     log_lambda=0.0, n_hidden=10, epsilon=1e-5, no_split=False,
     n_batches=1, LSTM='False', batch_update='True', actor_weight=1.0, mixed='False',
-    output_file_path='./json_files/', condensed_output='True')
+    output_file_path='./json_files/', condensed_output='True', instructed='False')
 
     for arg in args:
         k = arg.split("=")[0]
@@ -123,6 +127,7 @@ def parse_args(args):
     main_kwargs['actor_weight'] = float(main_kwargs['actor_weight'])
     main_kwargs['mixed']        = main_kwargs['mixed'] == 'True'
     main_kwargs['condensed_output'] = main_kwargs['condensed_output'] == 'True'
+    main_kwargs['instructed']        = main_kwargs['instructed'] == 'True'
     # main_kwargs['output_file_path']    = output_file_path
 
     return main_kwargs

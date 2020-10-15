@@ -4,7 +4,7 @@ import random, string
 import pandas as pd
 from tqdm import tqdm
 
-job_file = 'job_v091320_customAgg.py'
+job_file = 'job_v090820.py'
 
 def get_random_string(length):
     letters = string.ascii_lowercase
@@ -67,13 +67,16 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
 
 if __name__ == "__main__":
 
-    output_file_path = './json_files_v091320_MLP_customAgg/'
+    output_file_path = './json_files_v090820_LSTM_instructed/'
     
     #online version or batch update?
     batch_update = False
 
     # run both the mixed or just blocked/interleaved?
-    mixed = True
+    mixed = False
+
+    # run the instructed case?
+    instructed = True
 
     # run the LSTM version or the MLP?
     LSTM = False
@@ -89,23 +92,20 @@ if __name__ == "__main__":
     # but this is in the set that includes max clustering performance (cf. SchemaPrediction v071420; pre-run)
 
     # extensive testing shows that a good learning rate is an order of magnitiude arround 1e-3 
-    # lrs = [np.round(ii*10**-4,4) for ii in range(5, 10, 2)] + \
-    #     [np.round(ii*10**-3,3) for ii in range(1, 7, 2)]
-    # lrs = [np.round(ii*10**-4,4) for ii in range(5, 10, 2)] + [0.001]
-    # lrs =  [0.0005, 0.0006, 0.0007, 0.0008, 0.0009, 0.001, 0.0012, 0.0014,
-    #     0.0016, 0.002, 0.003, 0.004, 0.005]
-    # n_epochs_ = [4, 6, 8, 9, 10, 11, 12, 14, 16, 20, 24, 32]
+    ## uncomment below to run parameter search
     # lrs = [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]
     # n_epochs_ = [1, 2, 4, 8, 16, 32, 64]
 
     # log_alphas = [-32, -16, -8, -4, -2, 0, 2, 4, 8, 16, 32]
     # log_lambdas = [-32, -16, -8, -4, -2, 0, 2, 4, 8, 16, 32]
-    lrs = [0.001]
-    n_epochs_ = [16]
-    log_lambdas = [-32]
-    log_alphas = [2.0]
-
     
+    # run single fit parameters.
+    lrs = [0.005]
+    n_epochs_ = [4]
+    log_alphas = [2.0]
+    log_lambdas = [32.0]
+
+
     # How many batches per simulation? Should be kept low for parameter searches
     n_batches = 50
 
@@ -131,6 +131,7 @@ if __name__ == "__main__":
                             mixed=mixed,
                             output_file_path=output_file_path,
                             results_only=results_only,
+                            instructed=instructed,
                         )
                         list_kwargs.append(kwargs)
 
@@ -150,6 +151,7 @@ if __name__ == "__main__":
                         mixed=mixed,
                         output_file_path=output_file_path,
                         results_only=results_only,
+                        instructed=instructed,
                     )
                     list_kwargs.append(kwargs)
 
@@ -166,8 +168,8 @@ if __name__ == "__main__":
     
     # create the slurm submissions 
     for ii, kwargs in enumerate(list_kwargs):
-        print('Submitting job {} of {}'.format(ii + 1, n))
         # print(make_kw_string(kwargs))
+        print('Submitting job {} of {}'.format(ii + 1, n))
         make_slurm_shell(kwargs, filename="_slurm.sh")
 
         os.system('sbatch _slurm.sh')

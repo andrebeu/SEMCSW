@@ -1,4 +1,4 @@
-"""Schema Prediction, Andre's version, 5/12/20
+"""Schema Prediction, Andre's version, 9/08/20
 
 
 This notebook includes all of the code for the experients and analyses.  It uses a python v3 and 
@@ -49,7 +49,7 @@ def logsumexp_mean(x):
     return logsumexp(x) - np.log(len(x))
 
 def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embedding_library=None, 
-                    actor_weight=1.0):
+                    actor_weight=1.0, instructions_weight=0.0):
     """
     :param condition: (str), either 'blocked', 'interleaved', 'early', 'middle', or 'late'
     :param seed: (int), random seed for consistency
@@ -59,6 +59,7 @@ def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embeddin
     :param embedding_library: (dictionary, default=None) contains the word embeddings,
         to allow a single library to be reused mutliple times
     :param actor_weight: (float, default=1) how much to weight the actor in the representation
+    :param actor_weight: (float, default=0) how much to weight the schema instructions (A or B) in the representation
 
 
     Each scene in the experiment is the conjunction of 2 terms: 
@@ -200,10 +201,11 @@ def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embeddin
         # draw the nodes
         t = transitions[list_transitions[ii]]
         e.append(list_transitions[ii])
+        schema = 'Schema{}'.format(list_transitions[ii])
 
         # encode the initial scene
         n = 0  # pick the initial scene
-        x0 = [['Verb0', a]]
+        x0 = [['Verb0', a, schema]]
         y.append(n)
         while n < 7:  # draw all of the scenes until the last scene (scene 7 or 8) is reached
             # draw a random scene, conditioned on the current scene, using the transition function
@@ -211,7 +213,8 @@ def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embeddin
 
             # encode the scenes
             v = 'Verb{}'.format(n)
-            x0.append([v, a])
+            
+            x0.append([v, a, schema])
             y.append(n)
         stories.append(x0)
 
@@ -242,16 +245,22 @@ def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embeddin
             for ii in range(n_train + n_test)
         })
 
+        embedding_library.update({
+            'Schema{}'.format(ii): embed_gaussian(d)  for ii in [0, 1]
+        })
+
     keys = list(embedding_library.keys())
     keys.sort()
 
     # ~~~~~ 
     #### encode the stories  as vectors       
     def encode_scene(s):
-        X = embedding_library[s[0]] + embedding_library[s[1]] * actor_weight
+        X = embedding_library[s[0]] \
+            + embedding_library[s[1]] * actor_weight \
+            + embedding_library[s[2]] * instructions_weight
         # divide by sqrt(2), as specified in plate, 1995, to keep expected 
         # length at ~1.0
-        return X / np.sqrt(1 + actor_weight)
+        return X / np.sqrt(1 + actor_weight + instructions_weight)
 
     x = []  
     for s in stories:
@@ -469,7 +478,7 @@ def score_results(results, e, y, n_train=160, n_test=40, condensed=False):
 def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, progress_bar=True,
     sem_progress_bar=False, block_only=False, interleaved_only=False, aggregator=np.sum, run_mixed=False, 
     debug=False, save_to_json=False, json_tag='', json_file_path='./', no_split=False, normalize=False,
-    condensed_output=True):
+    condensed_output=True, run_instructed=False):
     """
     :param sem_kwargs: (dictionary)
     :param stories_kwargs: (dictionary) 
@@ -494,38 +503,38 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
     stories_kwargs['n_test'] = n_test
     
     # create a function that takes in "blocked" or "interleaved" as an argument and runs a batch of trials
-    def run_condition(condition, batch=1, no_split=False):
-        """
-        :param condition: (str), either 'blocked', 'interleaved', 'early', 'middle', or 'late'
-        """
+    # def run_condition(condition, batch=1, no_split=False, stories_kwargs):
+    #     """
+    #     :param condition: (str), either 'blocked', 'interleaved', 'early', 'middle', or 'late'
+    #     """
     
-        # generate the stories for the model
-        x, y, e, _ = generate_exp(condition, **stories_kwargs)
+    #     # generate the stories for the model
+    #     x, y, e, _ = generate_exp(condition, **stories_kwargs)
 
-        if normalize:
-            x = [preprocessing.normalize(x0) for x0 in x]
+    #     if normalize:
+    #         x = [preprocessing.normalize(x0) for x0 in x]
 
-        n_trials = n_train + n_test
-        if debug: 
-            x = x[:n_train//2]
-            y = y[:(n_train // 2) * 5]
-            e = y[:(n_train // 2)]
-            n_trials = n_train // 2
+    #     n_trials = n_train + n_test
+    #     if debug: 
+    #         x = x[:n_train//2]
+    #         y = y[:(n_train // 2) * 5]
+    #         e = y[:(n_train // 2)]
+    #         n_trials = n_train // 2
 
 
-        # run the model
-        run_kwargs = dict(save_x_hat=True, progress_bar=sem_progress_bar)
+    #     # run the model
+    #     run_kwargs = dict(save_x_hat=True, progress_bar=sem_progress_bar)
 
-        if not no_split:
-            results = sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
-        else:
-            results = no_split_sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
-        results.x_orig = np.concatenate(x)
+    #     if not no_split:
+    #         results = sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
+    #     else:
+    #         results = no_split_sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
+    #     results.x_orig = np.concatenate(x)
         
 
-        if condensed_output:
-            return score_results(results, e, y, n_train=n_train, n_test=n_test, condensed=condensed_output)
-        return score_results(results, e, y, n_train=n_train, n_test=n_test)
+    #     if condensed_output:
+    #         return score_results(results, e, y, n_train=n_train, n_test=n_test, condensed=condensed_output)
+    #     return score_results(results, e, y, n_train=n_train, n_test=n_test)
 
     results = []
     boundaries = []
@@ -553,20 +562,55 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
             conditions.append('Middle')
             conditions.append('Late')
 
+        if run_instructed:
+            conditions.append('Instructed')
+
+
         if not conditions:
             raise(Exception("No conditions to run!"))    
 
         for condition in conditions:
 
+            ## helper function, used later ##
             # add batch number and condition to all of the results
             def add_batch_cond(json_data):
                 for ii in range(len(json_data)):
                     json_data[ii]['batch'] = kk
                     json_data[ii]['Condition'] = condition
                 return json_data
+            ##  ~~~~~~~~~~~~~~~~~~~~~~~~  ##
+
+            if conditions == "Instructed":
+                stories_kwargs['instructions_weight'] = 1.0
+                x, y, e, _ = generate_exp("Interleaved", **stories_kwargs)
+            else:
+                stories_kwargs['instructions_weight'] = 0.0
+                x, y, e, _ = generate_exp(condition, **stories_kwargs)
+
+            if normalize:
+                x = [preprocessing.normalize(x0) for x0 in x]
+
+            n_trials = n_train + n_test
+            if debug: 
+                x = x[:n_train//2]
+                y = y[:(n_train // 2) * 5]
+                e = y[:(n_train // 2)]
+                n_trials = n_train // 2
+
+
+            # run the model
+            run_kwargs = dict(save_x_hat=True, progress_bar=sem_progress_bar)
+
+            if not no_split:
+                _sem_results = sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
+            else:
+                _sem_results = no_split_sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
+            _sem_results.x_orig = np.concatenate(x)
+
 
             if condensed_output:
-                _res, _trialX = run_condition(condition, kk, no_split)
+                _res, _trialX = score_results(_sem_results, e, y, n_train=n_train, n_test=n_test, 
+                    condensed=condensed_output)
                 
                 _res = add_batch_cond(_res)
                 _trialX = add_batch_cond(_trialX)
@@ -583,7 +627,7 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
                     pd.DataFrame(trialXtrial).to_csv('{}trial_X_trial{}.csv'.format(json_file_path, json_tag),
                     index=False)
             else:
-                _res, _bound, _pred = run_condition(condition, kk, no_split)
+                _res, _bound, _pred = score_results(_sem_results, e, y, n_train=n_train, n_test=n_test)
 
                 _res = add_batch_cond(_res)
                 _bound = add_batch_cond(_bound)

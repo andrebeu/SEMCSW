@@ -19,7 +19,8 @@ batch_size        = 25.0
 def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
     log_lambda=0.0, n_hidden=10, epsilon=1e-5, no_split=False,
      n_batches=0, LSTM=False, batch_update=True, actor_weight=1.0, mixed=False,
-     output_file_path='./json_files/', condensed_output=True, instructed=False):
+     output_file_path='./json_files/', condensed_output=True, instructed=False, 
+     interleaved_only=False):
     """ 
     :param n_epochs:    int     (28)
     :param batch_size:  int     (25)
@@ -59,7 +60,8 @@ def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
         optimizer_kwargs=optimizer_kwargs,
         n_hidden=n_hidden
         )
-    sem_kwargs = dict(lmda=np.exp(log_lambda), alfa=np.exp(log_alpha), f_opts=f_opts, f_class=f_class)
+    sem_kwargs = dict(lmda=np.exp(log_lambda), alfa=np.exp(log_alpha), 
+        f_opts=f_opts, f_class=f_class)
 
     # mark whether we run th
     tag = ''
@@ -73,6 +75,9 @@ def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
 
     if instructed:
         tag += '_instructed'
+
+    if interleaved_only:
+        tag += '_interleaved_only'
 
     # for now, we only consider the basic blocked vs interleaved set up
     json_tag = '_{}_nhidden{}_e{}_lr{}_n{}_d{}_logalfa_{}_loglmda_{}_{}'.format(
@@ -88,6 +93,7 @@ def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
         json_file_path=output_file_path, 
         no_split=no_split,
         condensed_output=condensed_output,
+        interleaved_only=interleaved_only
         run_instructed=instructed)
 
 
@@ -97,7 +103,8 @@ def parse_args(args):
     main_kwargs = dict(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
     log_lambda=0.0, n_hidden=10, epsilon=1e-5, no_split=False,
     n_batches=1, LSTM='False', batch_update='True', actor_weight=1.0, mixed='False',
-    output_file_path='./json_files/', condensed_output='True', instructed='False')
+    output_file_path='./json_files/', condensed_output='True', instructed='False', 
+    interleaved_only='False')
 
     for arg in args:
         k = arg.split("=")[0]
@@ -128,6 +135,7 @@ def parse_args(args):
     main_kwargs['mixed']        = main_kwargs['mixed'] == 'True'
     main_kwargs['condensed_output'] = main_kwargs['condensed_output'] == 'True'
     main_kwargs['instructed']        = main_kwargs['instructed'] == 'True'
+    main_kwargs['interleaved_only']   = main_kwargs['interleaved_only'] == 'True'
     # main_kwargs['output_file_path']    = output_file_path
 
     return main_kwargs

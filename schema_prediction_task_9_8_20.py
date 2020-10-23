@@ -478,7 +478,7 @@ def score_results(results, e, y, n_train=160, n_test=40, condensed=False):
 def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, progress_bar=True,
     sem_progress_bar=False, block_only=False, interleaved_only=False, aggregator=np.sum, run_mixed=False, 
     debug=False, save_to_json=False, json_tag='', json_file_path='./', no_split=False, normalize=False,
-    condensed_output=True, run_instructed=False):
+    condensed_output=True, run_instructed=False, run_blocked_instructed=False):
     """
     :param sem_kwargs: (dictionary)
     :param stories_kwargs: (dictionary) 
@@ -565,6 +565,9 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
         if run_instructed:
             conditions.append('Instructed')
 
+        if run_blocked_instructed:
+            conditions.append('Instructed-Blocked')
+
 
         if not conditions:
             raise(Exception("No conditions to run!"))    
@@ -580,9 +583,12 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
                 return json_data
             ##  ~~~~~~~~~~~~~~~~~~~~~~~~  ##
 
-            if conditions == "Instructed":
+            if condition == "Instructed":
                 stories_kwargs['instructions_weight'] = 1.0
                 x, y, e, _ = generate_exp("Interleaved", **stories_kwargs)
+            elif condition == "Instructed-Blocked":
+                stories_kwargs['instructions_weight'] = 1.0
+                x, y, e, _ = generate_exp("Blocked", **stories_kwargs)
             else:
                 stories_kwargs['instructions_weight'] = 0.0
                 x, y, e, _ = generate_exp(condition, **stories_kwargs)
@@ -590,7 +596,7 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
             if normalize:
                 x = [preprocessing.normalize(x0) for x0 in x]
 
-            n_trials = n_train + n_test
+            # n_trials = n_train + n_test
             if debug: 
                 x = x[:n_train//2]
                 y = y[:(n_train // 2) * 5]

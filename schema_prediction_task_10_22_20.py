@@ -242,10 +242,17 @@ def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embeddin
             'Actor{}'.format(ii): (embed_gaussian(d) + agent_property)  / np.sqrt(2.0) 
             for ii in range(n_train + n_test)
         })
-
-        embedding_library.update({
-            'Schema{}'.format(ii): embed_gaussian(d)  for ii in [0, 1]
-        })
+        if use_instructions:
+            # use a different instructions for each schema
+            embedding_library.update({
+                'Schema{}'.format(ii): embed_gaussian(d)  for ii in [0, 1]
+            })
+        else:
+            # use the same instructions for all of the schemas
+            instructions_vector = embed_gaussian(d)
+            embedding_library.update({
+                'Schema{}'.format(ii): instructions_vector  for ii in [0, 1]
+            })
 
     keys = list(embedding_library.keys())
     keys.sort()
@@ -253,12 +260,12 @@ def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embeddin
     # ~~~~~ 
     #### encode the stories  as vectors       
     def encode_scene(s):
-        X = embedding_library[s[0]] \
-            + embedding_library[s[1]] * actor_weight \
-            + embedding_library[s[2]] * instructions_weight
+        X = np.concatenate([embedding_library[s[0]] \
+            + embedding_library[s[1]] * actor_weight,
+            + embedding_library[s[2]]], axis=1)
         # divide by sqrt(2), as specified in plate, 1995, to keep expected 
         # length at ~1.0
-        return X / np.sqrt(1 + actor_weight + instructions_weight)
+        return X / np.sqrt(2 + actor_weight)
 
     x = []  
     for s in stories:
@@ -578,11 +585,11 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
                 return json_data
             ##  ~~~~~~~~~~~~~~~~~~~~~~~~  ##
 
-            if conditions == "Instructed":
-                stories_kwargs['instructions_weight'] = 1.0
+            if condition == "Instructed":
+                stories_kwargs['use_instructions'] = True
                 x, y, e, _ = generate_exp("Interleaved", **stories_kwargs)
             else:
-                stories_kwargs['instructions_weight'] = 0.0
+                stories_kwargs['use_instructions'] = False
                 x, y, e, _ = generate_exp(condition, **stories_kwargs)
 
             if normalize:

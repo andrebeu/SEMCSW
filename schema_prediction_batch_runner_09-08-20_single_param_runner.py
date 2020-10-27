@@ -20,7 +20,7 @@ def make_kw_string(kwargs):
 def make_kw_tag(kwargs):
     kw_string = ''
     for k, v in kwargs.items():
-        if k is not 'output_file_path':
+        if k != 'output_file_path':
             kw_string += str(k) + '=' + str(v) + '_'    
     return kw_string[:-1] # remove final underscore
 
@@ -67,7 +67,7 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
 
 if __name__ == "__main__":
 
-    output_file_path = './json_files_v090820_LSTM_Instructed/'
+    output_file_path = './json_files_v090820_LSTM_instructed/'
     
     #online version or batch update?
     batch_update = False
@@ -77,11 +77,6 @@ if __name__ == "__main__":
 
     # run the instructed case?
     instructed = True
-    interleaved_only = True
-
-
-    # run the LSTM version or the MLP?
-    LSTM = False
 
     # Save the Prediction error and boundary info? (storage intensive)
     condensed_output = True
@@ -89,61 +84,83 @@ if __name__ == "__main__":
     # dont' change these.
     #   Extensive testing says these values are fine and relatively unimportant!
     n_hidden = None
-    epsilons = [1e-5]  
-    # lrs = [0.0009]  # there are other lr that work as well, 
-    # but this is in the set that includes max clustering performance (cf. SchemaPrediction v071420; pre-run)
+    epsilon = 1e-5
 
-    # extensive testing shows that a good learning rate is an order of magnitiude arround 1e-3 
-    # lrs = [np.round(ii*10**-4,4) for ii in range(5, 10, 2)] + \
-    #     [np.round(ii*10**-3,3) for ii in range(1, 7, 2)]
-    # lrs = [np.round(ii*10**-4,4) for ii in range(5, 10, 2)] + [0.001]
-    # lrs =  [0.0005, 0.0006, 0.0007, 0.0008, 0.0009, 0.001, 0.0012, 0.0014,
-    #     0.0016, 0.002, 0.003, 0.004, 0.005]
-    # n_epochs_ = [4, 6, 8, 9, 10, 11, 12, 14, 16, 20, 24, 32]
-    lrs = [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]
-    n_epochs_ = [1, 2, 4, 8, 16, 32, 64]
-
-    log_alphas = [-208]
-    log_lambdas = [-208]
-    
     # How many batches per simulation? Should be kept low for parameter searches
     n_batches = 50
 
+
+    # run single fit parameters.
     list_kwargs = []
 
-    for epsilon in epsilons:
-        for lr in lrs:
-            for n_epochs in n_epochs_:
+    #######   Best Fit SEM Parameters ########
+    lr = 0.1
+    n_epochs = 1
+    log_alpha = 8.0
+    log_lambda = -4.0
+    
+    no_split = False
+    LSTM = True # run the LSTM version or the MLP?
 
-                # append the No-Split SEM simulations
-                kwargs = dict(
-                    no_split=True,
-                    LSTM=LSTM,
-                    epsilon=epsilon,
-                    lr=lr,
-                    n_epochs=n_epochs,
-                    n_hidden=n_hidden,
-                    n_batches=n_batches,
-                    batch_update=batch_update,
-                    actor_weight=0.0,
-                    mixed=mixed,
-                    output_file_path=output_file_path,
-                    condensed_output=condensed_output,
-                    interleaved_only=interleaved_only,
-                    instructed=instructed,
-                )
-                list_kwargs.append(kwargs)
+    kwargs = dict(no_split=no_split, LSTM=LSTM, epsilon=epsilon, lr=lr, n_epochs=n_epochs, 
+        n_hidden=n_hidden, log_alpha=log_alpha, log_lambda=log_lambda, n_batches=n_batches,
+        batch_update=batch_update, actor_weight=0.0, mixed=mixed, instructed=instructed,
+        output_file_path=output_file_path, condensed_output=condensed_output,
+    )
+    list_kwargs.append(kwargs)
+
+
+    #######   Best Fit LSTM Parameters ########
+    lr = 0.005
+    n_epochs = 4
+    log_alpha = 2.0
+    log_lambda = 32.0
+    
+    no_split = True
+    LSTM = True # run the LSTM version or the MLP?
+
+    kwargs = dict(no_split=no_split, LSTM=LSTM, epsilon=epsilon, lr=lr, n_epochs=n_epochs, 
+        n_hidden=n_hidden, log_alpha=log_alpha, log_lambda=log_lambda, n_batches=n_batches,
+        batch_update=batch_update, actor_weight=0.0, mixed=mixed, instructed=instructed,
+        output_file_path=output_file_path, condensed_output=condensed_output,
+    )
+    list_kwargs.append(kwargs)
+
+    #######   Best Fit MLP Parameters ########
+    lr = 0.01
+    n_epochs = 4
+    log_alpha = -2.0
+    log_lambda = 32.0
+    
+    no_split = True
+    LSTM = False # run the LSTM version or the MLP?
+
+    kwargs = dict(no_split=no_split, LSTM=LSTM, epsilon=epsilon, lr=lr, n_epochs=n_epochs, 
+        n_hidden=n_hidden, log_alpha=log_alpha, log_lambda=log_lambda, n_batches=n_batches,
+        batch_update=batch_update, actor_weight=0.0, mixed=mixed, instructed=instructed,
+        output_file_path=output_file_path, condensed_output=condensed_output,
+    )
+    list_kwargs.append(kwargs)
+
+    # also, with condensed output
+    kwargs = dict(no_split=no_split, LSTM=LSTM, epsilon=epsilon, lr=lr, n_epochs=n_epochs, 
+        n_hidden=n_hidden, log_alpha=log_alpha, log_lambda=log_lambda, n_batches=n_batches,
+        batch_update=batch_update, actor_weight=0.0, mixed=mixed, instructed=instructed,
+        output_file_path=output_file_path, condensed_output=False,
+    )
+    list_kwargs.append(kwargs)
+
+
+
 
     # randomize the simulation order for effective sampling speed 
     # (i.e. intermediate progress is more meaningful)
     list_kwargs = np.random.permutation(list_kwargs)
     n = len(list_kwargs)
-    print(n)
-    print(n_epochs_)
-    print(lrs)
-    
+    # print(list_kwargs)
     # create the slurm submissions 
     for ii, kwargs in enumerate(list_kwargs):
+        # print(make_kw_string(kwargs))
         print('Submitting job {} of {}'.format(ii + 1, n))
         make_slurm_shell(kwargs, filename="_slurm.sh")
 

@@ -1,5 +1,5 @@
 import numpy as np
-from schema_prediction_task_9_8_20 import generate_exp, batch_exp
+from schema_prediction_task_10_22_20 import generate_exp, batch_exp
 from andreRNN import AndreRNN as VanillaLSTM
 from sem.event_models import NonLinearEvent
 import os
@@ -20,7 +20,7 @@ def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
     log_lambda=0.0, n_hidden=10, epsilon=1e-5, no_split=False,
      n_batches=0, LSTM=False, batch_update=True, actor_weight=1.0, mixed=False,
      output_file_path='./json_files/', condensed_output=True, instructed=False, 
-     interleaved_only=False, run_blocked_instructed=False):
+     interleaved_only=False):
     """ 
     :param n_epochs:    int     (28)
     :param batch_size:  int     (25)
@@ -94,7 +94,6 @@ def main(n_epochs=28,batch_size=25,lr=0.001,log_alpha=0.0,
         no_split=no_split,
         condensed_output=condensed_output,
         interleaved_only=interleaved_only,
-        run_blocked_instructed=run_blocked_instructed,
         run_instructed=instructed)
 
 
@@ -105,7 +104,7 @@ def parse_args(args):
     log_lambda=0.0, n_hidden=10, epsilon=1e-5, no_split=False,
     n_batches=1, LSTM='False', batch_update='True', actor_weight=1.0, mixed='False',
     output_file_path='./json_files/', condensed_output='True', instructed='False', 
-    interleaved_only='False', run_blocked_instructed='False')
+    interleaved_only='False')
 
     for arg in args:
         k = arg.split("=")[0]
@@ -137,7 +136,6 @@ def parse_args(args):
     main_kwargs['condensed_output'] = main_kwargs['condensed_output'] == 'True'
     main_kwargs['instructed']        = main_kwargs['instructed'] == 'True'
     main_kwargs['interleaved_only']   = main_kwargs['interleaved_only'] == 'True'
-    main_kwargs['run_blocked_instructed']  = main_kwargs['run_blocked_instructed'] == 'True'
     # main_kwargs['output_file_path']    = output_file_path
 
     return main_kwargs

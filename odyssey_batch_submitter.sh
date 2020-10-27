@@ -27,6 +27,8 @@ cd ~/SchemaPrediction
 # python -u schema_prediction_batch_runner_08-19-20_Inference.py &> ./logs/batch_submitter_1.log
 # python -u schema_prediction_batch_runner_08-07-20.py &> ./logs/batch_submitter_2.log
 # python -u schema_prediction_batch_runner_09-13-20_LSTM_customAgg.py &> ./logs/batch_submitter_0.log
-python -u schema_prediction_batch_runner_09-08-20_LSTM_instructed.py &> ./logs/batch_submitter_1.log
+python -u schema_prediction_batch_runner_09-08-20_single_param_runner.py &> ./logs/batch_submitter_0.log
+python -u schema_prediction_batch_runner_10-22-20_MLP_instructed.py &> ./logs/batch_submitter_1.log
+python -u schema_prediction_batch_runner_09-08-20_MLP_instructed.py &> ./logs/batch_submitter_2.log
 
 sleep 10

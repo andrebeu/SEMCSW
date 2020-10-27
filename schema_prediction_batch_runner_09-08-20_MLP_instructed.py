@@ -30,10 +30,6 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
     kw_string = make_kw_string(kwargs)
     tag = make_kw_tag(kwargs)
 
-
-    # generate a random name of a conda enviornment
-    conda_name = 'temp_' + get_random_string(4)  
-
     # these are the file lines we will have
     lines = [
         "#!/bin/bash",
@@ -67,7 +63,7 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
 
 if __name__ == "__main__":
 
-    output_file_path = './json_files_v090820_LSTM_Instructed/'
+    output_file_path = './json_files_v090820_MLP_Instructed/'
     
     #online version or batch update?
     batch_update = False
@@ -77,8 +73,7 @@ if __name__ == "__main__":
 
     # run the instructed case?
     instructed = True
-    interleaved_only = True
-
+    run_blocked_instructed = True
 
     # run the LSTM version or the MLP?
     LSTM = False
@@ -129,7 +124,7 @@ if __name__ == "__main__":
                     mixed=mixed,
                     output_file_path=output_file_path,
                     condensed_output=condensed_output,
-                    interleaved_only=interleaved_only,
+                    run_blocked_instructed=run_blocked_instructed,
                     instructed=instructed,
                 )
                 list_kwargs.append(kwargs)

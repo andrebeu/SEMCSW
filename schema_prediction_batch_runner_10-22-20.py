@@ -4,7 +4,7 @@ import random, string
 import pandas as pd
 from tqdm import tqdm
 
-job_file = 'job_v090820.py'
+job_file = 'job_v102220.py'
 
 def get_random_string(length):
     letters = string.ascii_lowercase
@@ -67,7 +67,7 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
 
 if __name__ == "__main__":
 
-    output_file_path = './json_files_v090820_LSTM_Instructed/'
+    output_file_path = './json_files_v102220/'
     
     #online version or batch update?
     batch_update = False
@@ -77,9 +77,7 @@ if __name__ == "__main__":
 
     # run the instructed case?
     instructed = True
-    interleaved_only = True
-
-
+    
     # run the LSTM version or the MLP?
     LSTM = False
 
@@ -90,21 +88,12 @@ if __name__ == "__main__":
     #   Extensive testing says these values are fine and relatively unimportant!
     n_hidden = None
     epsilons = [1e-5]  
-    # lrs = [0.0009]  # there are other lr that work as well, 
-    # but this is in the set that includes max clustering performance (cf. SchemaPrediction v071420; pre-run)
 
-    # extensive testing shows that a good learning rate is an order of magnitiude arround 1e-3 
-    # lrs = [np.round(ii*10**-4,4) for ii in range(5, 10, 2)] + \
-    #     [np.round(ii*10**-3,3) for ii in range(1, 7, 2)]
-    # lrs = [np.round(ii*10**-4,4) for ii in range(5, 10, 2)] + [0.001]
-    # lrs =  [0.0005, 0.0006, 0.0007, 0.0008, 0.0009, 0.001, 0.0012, 0.0014,
-    #     0.0016, 0.002, 0.003, 0.004, 0.005]
-    # n_epochs_ = [4, 6, 8, 9, 10, 11, 12, 14, 16, 20, 24, 32]
+    # parameter search over lr, n_epochs, alpha, lambda
     lrs = [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]
     n_epochs_ = [1, 2, 4, 8, 16, 32, 64]
-
-    log_alphas = [-208]
-    log_lambdas = [-208]
+    log_alphas = [-32, -16, -8, -4, -2, 0, 2, 4, 8, 16, 32]
+    log_lambdas = [-32, -16, -8, -4, -2, 0, 2, 4, 8, 16, 32]
     
     # How many batches per simulation? Should be kept low for parameter searches
     n_batches = 50
@@ -114,23 +103,61 @@ if __name__ == "__main__":
     for epsilon in epsilons:
         for lr in lrs:
             for n_epochs in n_epochs_:
+                for log_alpha in log_alphas:
+                    for log_lambda in log_lambdas:
+                        kwargs = dict(
+                            no_split=False,
+                            LSTM=LSTM,
+                            epsilon=epsilon,
+                            lr=lr,
+                            n_epochs=n_epochs,
+                            n_hidden=n_hidden,
+                            log_alpha=log_alpha,
+                            log_lambda=log_lambda,
+                            n_batches=n_batches,
+                            batch_update=batch_update,
+                            actor_weight=0.0,
+                            mixed=mixed,
+                            output_file_path=output_file_path,
+                            condensed_output=condensed_output,
+                        )
+                        list_kwargs.append(kwargs)
 
-                # append the No-Split SEM simulations
+                # append the LSTM Simulations
                 kwargs = dict(
                     no_split=True,
-                    LSTM=LSTM,
+                    LSTM=True,
                     epsilon=epsilon,
                     lr=lr,
                     n_epochs=n_epochs,
                     n_hidden=n_hidden,
+                    log_alpha=-208,
+                    log_lambda=208,
                     n_batches=n_batches,
                     batch_update=batch_update,
                     actor_weight=0.0,
                     mixed=mixed,
                     output_file_path=output_file_path,
                     condensed_output=condensed_output,
-                    interleaved_only=interleaved_only,
-                    instructed=instructed,
+                )
+                list_kwargs.append(kwargs)
+
+                # append the MLP Simulations
+                kwargs = dict(
+                    no_split=True,
+                    LSTM=True,
+                    epsilon=epsilon,
+                    lr=lr,
+                    n_epochs=n_epochs,
+                    n_hidden=n_hidden,
+                    log_alpha=-208,
+                    log_lambda=208,
+                    n_batches=n_batches,
+                    batch_update=batch_update,
+                    actor_weight=0.0,
+                    mixed=mixed,
+                    output_file_path=output_file_path,
+                    condensed_output=condensed_output,
                 )
                 list_kwargs.append(kwargs)
 
@@ -141,6 +168,9 @@ if __name__ == "__main__":
     print(n)
     print(n_epochs_)
     print(lrs)
+    print(log_alphas)
+    print(log_lambdas)
+
     
     # create the slurm submissions 
     for ii, kwargs in enumerate(list_kwargs):

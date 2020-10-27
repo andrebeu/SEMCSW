@@ -4,7 +4,7 @@ import random, string
 import pandas as pd
 from tqdm import tqdm
 
-job_file = 'job_v090820.py'
+job_file = 'job_v102220.py'
 
 def get_random_string(length):
     letters = string.ascii_lowercase
@@ -67,7 +67,7 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
 
 if __name__ == "__main__":
 
-    output_file_path = './json_files_v090820_LSTM_Instructed/'
+    output_file_path = './json_files_v102220_MLP_Instructed/'
     
     #online version or batch update?
     batch_update = False

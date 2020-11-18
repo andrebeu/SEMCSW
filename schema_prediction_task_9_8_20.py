@@ -29,7 +29,7 @@ from scipy.special import logsumexp
 
 from sem import sem_run_with_boundaries, SEM
 from sem.hrr import plate_formula, encode, decode, embed_gaussian
-from sem.utils import fast_mvnorm_diagonal_logprob, get_prior_scale, processify
+from sem.utils import fast_mvnorm_diagonal_logprob, get_prior_scale
 from no_split_sem import no_split_sem_run_with_boundaries, NoSplitSEM
 
 
@@ -476,23 +476,37 @@ def score_results(results, e, y, n_train=160, n_test=40, condensed=False):
 
 
 def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, progress_bar=True,
-    sem_progress_bar=False, block_only=False, interleaved_only=False, aggregator=np.sum, run_mixed=False, 
-    debug=False, save_to_json=False, json_tag='', json_file_path='./', no_split=False, normalize=False,
+    sem_progress_bar=False, block_only=False, interleaved_only=False, run_mixed=False, 
+    debug=False, save_to_json=False, json_tag='', json_file_path='./', no_split=False, 
     condensed_output=True, run_instructed=False, run_blocked_instructed=False):
     """
-    :param sem_kwargs: (dictionary)
-    :param stories_kwargs: (dictionary) 
-    :param n_batches: (int, default=8), a batch is one each of blocked and interleaved
+
+    Function generates random tasks and runs the model on them.  Returns relevant performance 
+    metrics, and can write these to file.
+
+
+    :param sem_kwargs: (dictionary) specify the SEM parameters
+    :param stories_kwargs: (dictionary) specify the parameters for the stories
+    :param n_batches: (int, default=8), a batch is one each of sample of each condition specified
     :param n_train: (int, default=160)
     :param n_test: (int, default=40)
-    :param progress_bar: (bool, default=True)
-    :param sem_progress_bar: (bool, default=False)
+    :param progress_bar: (bool, default=True) show a progress bar for each batch/condition 
+                        (just says "Run SEM")
+    :param sem_progress_bar:    (bool, default=False) show a progress bar for all 
+                                of the simulations (dont use with progress_bar = True)
     :param block_only: (bool, default=False)
     :param interleaved_only: (bool, default=False)
-    :param aggregator: (function, default=np.sum), defunct
     :param run_mixed: (bool, default=False) 
+    :param run_instructed: (bool, default=False)
+    :param run_blocked_instructed: (bool, default=False) diagnostic, run a blocked condition 
+                                        with instructions
     :param debug: (bool, default=False), only run the 1st two blocks of trials
-    :param save_to_json: (bool, default=False), save intermediate results to file
+    :param save_to_json: (bool, default=False), save results to file (good for running on a server)
+    :param json_tag: (str, default=''), add a file tag to the results
+    :param json_file_path: (str, default='./') specify a path to write to file
+    :param no_split: (bool, default=False) use the no-split version of the code (i.e. run as a NN model)
+    :param condensed_output: (bool, default=True), if True, output much larger set of analyses.
+                              Should be set to False
     """
     # if hasattr(stories_kwargs, 'n_train'):
     #     assert(stories_kwargs['n_train'] == n_train)
@@ -502,40 +516,6 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
     stories_kwargs['n_train'] = n_train
     stories_kwargs['n_test'] = n_test
     
-    # create a function that takes in "blocked" or "interleaved" as an argument and runs a batch of trials
-    # def run_condition(condition, batch=1, no_split=False, stories_kwargs):
-    #     """
-    #     :param condition: (str), either 'blocked', 'interleaved', 'early', 'middle', or 'late'
-    #     """
-    
-    #     # generate the stories for the model
-    #     x, y, e, _ = generate_exp(condition, **stories_kwargs)
-
-    #     if normalize:
-    #         x = [preprocessing.normalize(x0) for x0 in x]
-
-    #     n_trials = n_train + n_test
-    #     if debug: 
-    #         x = x[:n_train//2]
-    #         y = y[:(n_train // 2) * 5]
-    #         e = y[:(n_train // 2)]
-    #         n_trials = n_train // 2
-
-
-    #     # run the model
-    #     run_kwargs = dict(save_x_hat=True, progress_bar=sem_progress_bar)
-
-    #     if not no_split:
-    #         results = sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
-    #     else:
-    #         results = no_split_sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
-    #     results.x_orig = np.concatenate(x)
-        
-
-    #     if condensed_output:
-    #         return score_results(results, e, y, n_train=n_train, n_test=n_test, condensed=condensed_output)
-    #     return score_results(results, e, y, n_train=n_train, n_test=n_test)
-
     results = []
     boundaries = []
     prediction_err = []
@@ -593,8 +573,6 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
                 stories_kwargs['instructions_weight'] = 0.0
                 x, y, e, _ = generate_exp(condition, **stories_kwargs)
 
-            if normalize:
-                x = [preprocessing.normalize(x0) for x0 in x]
 
             # n_trials = n_train + n_test
             if debug: 

@@ -1,18 +1,19 @@
 *.ipynb
 *.json
-*.csv
+# *.csv
 .Notebooks_old/
 *.pdf
 *.svg
 _slurm.sh
 *pkl
-*.png
+# *.png
 *.ipynb_checkpoints
 *.vscode
 *.xml
 *.iml
 .idea
 .idea/*
+src/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -1,6 +1,6 @@
 import numpy as np
 from schema_prediction_task_9_8_20 import generate_exp, batch_exp
-from andreRNN import AndreRNN as VanillaLSTM
+from vanilla_lstm import VanillaLSTM
 from sem.event_models import NonLinearEvent
 import os
 

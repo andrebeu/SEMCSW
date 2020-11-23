@@ -4,7 +4,7 @@ import random, string
 import pandas as pd
 from tqdm import tqdm
 
-job_file = 'job_v090820.py'
+job_file = 'SLURM_job_v090820.py'
 
 def get_random_string(length):
     letters = string.ascii_lowercase
@@ -30,9 +30,6 @@ def make_slurm_shell(kwargs, filename="_slurm.sh"):
     kw_string = make_kw_string(kwargs)
     tag = make_kw_tag(kwargs)
 
-
-    # generate a random name of a conda enviornment
-    conda_name = 'temp_' + get_random_string(4)  
 
     # these are the file lines we will have
     lines = [

@@ -443,7 +443,7 @@ def score_results(results, e, y, n_train=160, n_test=40, condensed=False):
 
 
 def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, progress_bar=True,
-    sem_progress_bar=False, block_only=False, interleaved_only=False, run_mixed=False, 
+    sem_progress_bar=False, 
     save_to_json=False, json_tag='', json_file_path='./', no_split=False, 
     condensed_output=True, run_instructed=False, run_blocked_instructed=False, 
     conditions=['blocked','interleaved','early','middle','late','instructed_interleaved','instructed_blocked']):
@@ -476,10 +476,6 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
     :param condensed_output: (bool, default=True), if True, output much larger set of analyses.
                               Should be set to False
     """
-    # if hasattr(stories_kwargs, 'n_train'):
-    #     assert(stories_kwargs['n_train'] == n_train)
-    # if hasattr(stories_kwargs, 'n_test'):
-    #     assert(stories_kwargs['n_test'] == n_test)
 
     stories_kwargs['n_train'] = n_train
     stories_kwargs['n_test'] = n_test

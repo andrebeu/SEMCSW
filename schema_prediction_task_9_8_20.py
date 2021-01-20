@@ -442,16 +442,16 @@ def score_results(results, e, y, n_train=160, n_test=40, condensed=False):
         return results, trial_by_trial
 
 
-def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, progress_bar=True,
-    sem_progress_bar=False, 
+def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, 
     save_to_json=False, json_tag='', json_file_path='./', no_split=False, 
-    condensed_output=True, run_instructed=False, run_blocked_instructed=False, 
-    conditions=['blocked','interleaved','early','middle','late','instructed_interleaved','instructed_blocked']):
+    condensed_output=True, 
+    conditions=['blocked','interleaved','early','middle',
+        'late','instructed_interleaved','instructed_blocked'],
+    sem_progress_bar=False, progress_bar=True,
+    ):
     """
-
     Function generates random tasks and runs the model on them.  Returns relevant performance 
     metrics, and can write these to file.
-
 
     :param sem_kwargs: (dictionary) specify the SEM parameters
     :param stories_kwargs: (dictionary) specify the parameters for the stories
@@ -462,12 +462,6 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
                         (just says "Run SEM")
     :param sem_progress_bar:    (bool, default=False) show a progress bar for all 
                                 of the simulations (dont use with progress_bar = True)
-    :param block_only: (bool, default=False)
-    :param interleaved_only: (bool, default=False)
-    :param run_mixed: (bool, default=False) 
-    :param run_instructed: (bool, default=False)
-    :param run_blocked_instructed: (bool, default=False) diagnostic, run a blocked condition 
-                                        with instructions
     :param debug: (bool, default=False), only run the 1st two blocks of trials
     :param save_to_json: (bool, default=False), save results to file (good for running on a server)
     :param json_tag: (str, default=''), add a file tag to the results
@@ -525,7 +519,6 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
             else:
                 _sem_results = no_split_sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
             _sem_results.x_orig = np.concatenate(x)
-
 
             if condensed_output:
                 _res, _trialX = score_results(_sem_results, e, y, n_train=n_train, n_test=n_test, 

@@ -1,11 +1,5 @@
-"""Schema Prediction, Andre's version, 9/08/20
+"""
 
-
-This notebook includes all of the code for the experients and analyses.  It uses a python v3 and 
-tensorflow v1.14 port of the SEM model.  This version is mimics the tasks that Andre ran but 
-is simper in its representation.
-
-## Load Libraries
 """
 
 import numpy as np
@@ -19,14 +13,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn import preprocessing # used sparingly
 from scipy.special import logsumexp
 
-# ########## code to load SEM ##########
-# ##### imports from SEM model
-# import sys, os
-# # add the current path to python to allow loading SEM
-# current_path = os.path.abspath('.')
-# parent_path = os.path.dirname(current_path)
-# sys.path.append(parent_path)
-
+# SEM
 from sem import sem_run_with_boundaries, SEM
 from sem.hrr import plate_formula, encode, decode, embed_gaussian
 from sem.utils import fast_mvnorm_diagonal_logprob, get_prior_scale
@@ -34,10 +21,6 @@ from no_split_sem import no_split_sem_run_with_boundaries, NoSplitSEM
 
 
 
-"""## Define Experiment"""
-
-
-## these are utility functions
 
 def get_boundaries(e_hat):
     return np.array(
@@ -473,8 +456,6 @@ def score_results(results, e, y, n_train=160, n_test=40, condensed=False):
         return results, trial_by_trial
 
 
-
-
 def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, progress_bar=True,
     sem_progress_bar=False, block_only=False, interleaved_only=False, run_mixed=False, 
     debug=False, save_to_json=False, json_tag='', json_file_path='./', no_split=False, 
@@ -639,6 +620,7 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
     if not save_to_json:
         return output
     return None, None, None
+
 
 if __name__ == "__main__":
     pass

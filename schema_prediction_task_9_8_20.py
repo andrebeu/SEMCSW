@@ -102,13 +102,12 @@ def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embeddin
         message = 'Condition Specified: {}\nPlease specify either blocked or interleaved!'.format(condition)
         raise(Exception(message))
 
-
     if seed is not None:
         assert type(seed) == int
         np.random.seed(seed)
 
     # transition functions are defined T(s, s') = p
-    # these are the "Brew house" stories
+    # "Brew house" stories
     transition_probs_b = {
         (0, 1): 1.0, 
         (1, 3): 0.5, (1, 4): 0.5, 
@@ -118,7 +117,7 @@ def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embeddin
         (6, 8): 1.0,
     }
 
-    # these are the "Deep Ocean Cafe" stories
+    # "Deep Ocean Cafe" stories
     transition_probs_c = {
         (0, 2): 1.0, 
         (2, 3): 0.5, (2, 4): 0.5, 
@@ -458,8 +457,9 @@ def score_results(results, e, y, n_train=160, n_test=40, condensed=False):
 
 def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, progress_bar=True,
     sem_progress_bar=False, block_only=False, interleaved_only=False, run_mixed=False, 
-    debug=False, save_to_json=False, json_tag='', json_file_path='./', no_split=False, 
-    condensed_output=True, run_instructed=False, run_blocked_instructed=False):
+    save_to_json=False, json_tag='', json_file_path='./', no_split=False, 
+    condensed_output=True, run_instructed=False, run_blocked_instructed=False, 
+    conditions_=['b','i','e','m','l','ins']):
     """
 
     Function generates random tasks and runs the model on them.  Returns relevant performance 
@@ -553,15 +553,6 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
             else:
                 stories_kwargs['instructions_weight'] = 0.0
                 x, y, e, _ = generate_exp(condition, **stories_kwargs)
-
-
-            # n_trials = n_train + n_test
-            if debug: 
-                x = x[:n_train//2]
-                y = y[:(n_train // 2) * 5]
-                e = y[:(n_train // 2)]
-                n_trials = n_train // 2
-
 
             # run the model
             run_kwargs = dict(save_x_hat=True, progress_bar=sem_progress_bar)

@@ -86,22 +86,6 @@ def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embeddin
 
     """
 
-    # check for valid condition type
-    assert type(condition) == str        
-    if condition[0].lower() == 'b':
-        condition = 'blocked'
-    elif (condition[0].lower() == 'i'):
-        condition = 'interleaved'
-    elif (condition[0].lower() == 'e'):
-        condition = 'early'
-    elif (condition[0].lower() == 'm'):
-        condition = 'middle'
-    elif (condition[0].lower() == 'l'):
-        condition = 'late'
-    else:
-        message = 'Condition Specified: {}\nPlease specify either blocked or interleaved!'.format(condition)
-        raise(Exception(message))
-
     if seed is not None:
         assert type(seed) == int
         np.random.seed(seed)
@@ -164,8 +148,11 @@ def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embeddin
             [0, 1] * (n_train // 4) + \
             [0] * (n_train // 4) + \
             [1] * (n_train // 4)
-    else:
+    elif condition == 'interleaved':
         list_transitions = [0, 1] * (n_train // 2)
+    else:
+        print('condition not properly specified')
+        assert False
 
     # randomly flip which one starts off
     _X = int(np.random.rand() < 0.5)
@@ -459,7 +446,7 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
     sem_progress_bar=False, block_only=False, interleaved_only=False, run_mixed=False, 
     save_to_json=False, json_tag='', json_file_path='./', no_split=False, 
     condensed_output=True, run_instructed=False, run_blocked_instructed=False, 
-    conditions_=['b','i','e','m','l','ins']):
+    conditions=['blocked','interleaved','early','middle','late','instructed_interleaved','instructed_blocked']):
     """
 
     Function generates random tasks and runs the model on them.  Returns relevant performance 
@@ -510,30 +497,10 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
         def my_it(l):
             return range(l)
 
-    for kk in my_it(n_batch):
-        
-        conditions = ['Blocked', "Interleaved"]
-        if block_only:
-            conditions.remove('Interleaved')
-        if interleaved_only:
-            conditions.remove('Blocked')
-
-        if run_mixed:
-            conditions.append('Early')
-            conditions.append('Middle')
-            conditions.append('Late')
-
-        if run_instructed:
-            conditions.append('Instructed')
-
-        if run_blocked_instructed:
-            conditions.append('Instructed-Blocked')
-
-
-        if not conditions:
-            raise(Exception("No conditions to run!"))    
+    for kk in my_it(n_batch):  
 
         for condition in conditions:
+            print('batch_num',kk,'condition',condition)
 
             ## helper function, used later ##
             # add batch number and condition to all of the results
@@ -544,17 +511,17 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, pro
                 return json_data
             ##  ~~~~~~~~~~~~~~~~~~~~~~~~  ##
 
-            if condition == "Instructed":
+            if condition == "instructed_interleaved": # instructed interleaved
                 stories_kwargs['instructions_weight'] = 1.0
-                x, y, e, _ = generate_exp("Interleaved", **stories_kwargs)
-            elif condition == "Instructed-Blocked":
+                x, y, e, _ = generate_exp("interleaved", **stories_kwargs)
+            elif condition == "instructed_blocked": # instructed blocked
                 stories_kwargs['instructions_weight'] = 1.0
-                x, y, e, _ = generate_exp("Blocked", **stories_kwargs)
+                x, y, e, _ = generate_exp("blocked", **stories_kwargs)
             else:
                 stories_kwargs['instructions_weight'] = 0.0
                 x, y, e, _ = generate_exp(condition, **stories_kwargs)
 
-            # run the model
+            ## run the model
             run_kwargs = dict(save_x_hat=True, progress_bar=sem_progress_bar)
 
             if not no_split:

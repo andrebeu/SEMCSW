@@ -1,6 +1,4 @@
-#SBATCH --mail-type=begin
-#SBATCH --mail-type=end
-#SBATCH --mail-user=abeukers@princeton.edu
+#!/usr/bin/env bash
 
 #SBATCH -t 6:00:00   # runs for 48 hours (max)  
 #SBATCH --ntasks-per-node=1
@@ -9,8 +7,9 @@
 #SBATCH -o ./slurms/output.%j.%a.out
 
 
-module load pyger/0.9
-source activate sem
+# module load pyger/0.9
+conda init bash
+conda activate sem
 
 lr="${1}"
 epoch="${2}"

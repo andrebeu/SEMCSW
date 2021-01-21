@@ -11,10 +11,12 @@
 module load pyger/0.9
 conda activate sem
 
-corpus_fpath="${1}"
+lr="${1}"
+n_epochs="${2}"
+log_alpha="${3}"
+log_lambda="${4}"
 
-
-srun python ${wd_dir}/w2v_train.py "${corpus_fpath}"
-
+srun python PY-run_simulations.py "SEM" "${lr}" "${n_epochs}" "${log_alpha}" "${log_lambda}"
+srun python PY-run_simulations.py "LSTM" "${lr}" "${n_epochs}" "${log_alpha}" "${log_lambda}"
 
 sacct --format="CPUTime,MaxRSS"

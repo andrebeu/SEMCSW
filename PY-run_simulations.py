@@ -45,12 +45,10 @@ print(model_tag)
 # In[4]:
 
 conditions = ['interleaved','blocked','early','middle','late']
-n_batch = 50 
-
+n_batch = 50
 
 
 # ### SEM configuration
-
 
 
 # number of trials
@@ -96,7 +94,7 @@ batch_exp main fun call
 
 results, trialXtrial, _ = batch_exp(
               sem_kwargs, story_kwargs, no_split=no_split, 
-              sem_progress_bar=True, progress_bar=False,
+              sem_progress_bar=False, progress_bar=False,
               n_train=n_train, n_test=n_test,
               n_batch=n_batch, conditions=conditions
 )

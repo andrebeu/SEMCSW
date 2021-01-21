@@ -3,14 +3,8 @@
 
 # This script runs one param_set. Outputs results{}.csv and trialxtrial{}.csv
 
-# In[1]:
-
-
 import sys
-# print("Python version")
-# print (sys.version)
 
-# %matplotlib inline
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -26,18 +20,13 @@ from scipy.special import logsumexp
 from scipy.stats import norm
 from glob import glob
 
-
-# In[2]:
-
-
 from schema_prediction_task_9_8_20 import generate_exp, batch_exp
 from vanilla_lstm import VanillaLSTM
 from sem.event_models import NonLinearEvent
 
+### simulation information
 
-# ### gridsearch params 
-
-# In[3]:
+save_dir = 'data/gridsearch_full1/'
 
 
 # parameter search over lr, n_epochs, alpha, lambda
@@ -48,31 +37,25 @@ log_alpha         = float(sys.argv[4])  # sCRP alpha is set in log scale
 log_lambda        = float(sys.argv[5])  # sCRP lambda is set in log scale
 
 
+model_tag = "%s-lr-%.3f-nepchs-%i-alpha-%.3f-lambda-%.3f"%(
+  model_type,lr,n_epochs,log_alpha,log_lambda
+)
+print(model_tag)
+
 # In[4]:
 
-
-# toggle between SEM (False) and LSTM (True)
-if model_type == 'SEM':
-  no_split=False
-elif model_type == 'LSTM':
-  no_split=True
-
-
-# In[ ]:
-
-
 conditions = ['interleaved','blocked','early','middle','late']
-# number of model replicas 
-n_batch = 10 
-# number of trials
-n_train = 160
-n_test = 40
+n_batch = 50 
+
 
 
 # ### SEM configuration
 
-# In[6]:
 
+
+# number of trials
+n_train = 160
+n_test = 40
 
 story_kwargs = dict(seed=None, err=0.2, actor_weight=1.0, instructions_weight=0.0)
 
@@ -100,11 +83,11 @@ sem_kwargs = dict(
 )
 
 
-# # Run model
-# 
-# main fun call
-
-# In[7]:
+# toggle between SEM (False) and LSTM (True)
+if model_type == 'SEM':
+  no_split=False
+elif model_type == 'LSTM':
+  no_split=True
 
 
 """ 
@@ -118,32 +101,14 @@ results, trialXtrial, _ = batch_exp(
               n_batch=n_batch, conditions=conditions
 )
 
-
-# In[8]:
-
-
 # convert from JSON file format (dict) to pandas df
 results = pd.DataFrame(results)
 trialXtrial = pd.DataFrame(trialXtrial)
 
 
-# # save
-# 
-
-# In[9]:
-
-
-model_tag = "%s-lr-%.3f-nepchs-%i-alpha-%.3f-lambda-%.3f"%(
-  model_type,lr,n_epochs,log_alpha,log_lambda
-)
-print(model_tag)
-
-save_dir = 'data/gridsearch_toy/'
+## save
 results_fpath = save_dir + "results_" + model_tag + '.csv'
 trial_fpath = save_dir + "trial_X_trial_" + model_tag + '.csv'
-
-
-# In[10]:
 
 
 results.to_csv(results_fpath)

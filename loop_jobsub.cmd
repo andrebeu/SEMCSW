@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 
 # parameter search over lr, n_epochs, alpha, lambda
 # declare -a lr_arr=(0.0001 0.0005 0.001 0.005 0.01 0.05 0.1)

@@ -1,0 +1,1 @@
+rsync -r -vam --dry-run /Users/abeukers/wd/csw/SchemaPrediction_internal/data

@@ -5,6 +5,7 @@
 #SBATCH -N 1         # node count 
 #SBATCH -c 4         # number of cores 
 #SBATCH -o ./slurms/output.%j.%a.out
+#SBATCH -e ./slurms/err.%j.%a
 
 
 # module load pyger/0.9

@@ -446,9 +446,7 @@ def score_results(results, e, y, n_train=160, n_test=40, condensed=False):
 
 
 def single_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, 
-    no_split=False, seed=99,
-    condition='blocked'
-    ):
+    no_split=False, seed=99, condition='blocked'):
     """
     Function generates random tasks and runs the model on them.  
     Returns relevant performance metrics, and can write these to file.

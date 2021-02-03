@@ -12,6 +12,7 @@
 conda init bash
 conda activate sem
 
+
 seed="${1}"
 lr="${2}"
 epoch="${3}"

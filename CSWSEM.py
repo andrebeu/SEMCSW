@@ -31,8 +31,7 @@ def logsumexp_mean(x):
     """ return the log of the mean, given a 1-d array of log values"""
     return logsumexp(x) - np.log(len(x))
 
-def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embedding_library=None, 
-                    actor_weight=1.0, instructions_weight=0.0):
+def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embedding_library=None, actor_weight=1.0, instructions_weight=0.0):
     """
     :param condition: (str), either 'blocked', 'interleaved', 'early', 'middle', or 'late'
     :param seed: (int), random seed for consistency
@@ -445,7 +444,7 @@ def score_results(results, e, y, n_train=160, n_test=40, condensed=False):
         return results, trial_by_trial
 
 
-def seed_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, 
+def seed_exp(sem_kwargs, n_train=160, n_test=40, 
     model_type='SEM', seed=99, condition='blocked'):
     """
     Function generates random tasks and runs the model on them.  
@@ -453,7 +452,6 @@ def seed_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40,
 
     :param sem_kwargs: (dictionary) specify the SEM parameters
     :param stories_kwargs: (dictionary) specify the parameters for the stories
-    :param n_batches: (int, default=8), a batch is one each of sample of each condition specified
     :param n_train: (int, default=160)
     :param n_test: (int, default=40)
     :param no_split: (bool, default=False) use the no-split version of the code (i.e. run as a NN model)
@@ -462,6 +460,7 @@ def seed_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40,
     """
     np.random.seed(seed)
 
+    stories_kwargs = {}
     stories_kwargs['n_train'] = n_train
     stories_kwargs['n_test'] = n_test
     
@@ -483,13 +482,11 @@ def seed_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40,
 
     if condition == "instructed_interleaved": # instructed interleaved
         stories_kwargs['instructions_weight'] = 1.0
-        x, y, e, _ = generate_exp("interleaved", **stories_kwargs)
     elif condition == "instructed_blocked": # instructed blocked
         stories_kwargs['instructions_weight'] = 1.0
-        x, y, e, _ = generate_exp("blocked", **stories_kwargs)
     else:
         stories_kwargs['instructions_weight'] = 0.0
-        x, y, e, _ = generate_exp(condition, **stories_kwargs)
+    x, y, e, _ = generate_exp(condition, **stories_kwargs)
 
     ## run the model
     run_kwargs = dict(save_x_hat=True, progress_bar=False)

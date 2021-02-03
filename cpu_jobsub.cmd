@@ -12,14 +12,11 @@
 conda init bash
 conda activate sem
 
-model="${1}"
+seed="${1}"
 lr="${2}"
 epoch="${3}"
-alpha="${4}"
-lambda="${5}"
 
-
-srun python PY-run_simulations.py "${model}" "${lr}" "${epoch}" "${alpha}" "${lambda}"
+srun python PY-run_simulations.py "${seed}" "${lr}" "${epoch}" 
 
 sacct --format="CPUTime,MaxRSS"
 

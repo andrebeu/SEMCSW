@@ -150,6 +150,9 @@ def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embeddin
             [1] * (n_train // 4)
     elif condition == 'interleaved':
         list_transitions = [0, 1] * (n_train // 2)
+    elif condition == 'single': ## DEBUG
+        list_transitions =  \
+            [0] * (n_train) 
     else:
         print('condition not properly specified')
         assert False
@@ -435,41 +438,31 @@ def score_results(results, e, y, n_train=160, n_test=40, condensed=False):
                 {
                     't': t,
                     'e_hat': int(e_hat[t]),
-                    'Accuracy': acc,
+                    'accuracy': acc,
                     'pe': pe,
                 }
             )
         return results, trial_by_trial
 
 
-def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, 
-    save_to_json=False, json_tag='', json_file_path='./', no_split=False, 
-    condensed_output=True, 
-    conditions=['blocked','interleaved','early','middle',
-        'late','instructed_interleaved','instructed_blocked'],
-    sem_progress_bar=False, progress_bar=True,
+def single_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, 
+    no_split=False, seed=99,
+    condition='blocked'
     ):
     """
-    Function generates random tasks and runs the model on them.  Returns relevant performance 
-    metrics, and can write these to file.
+    Function generates random tasks and runs the model on them.  
+    Returns relevant performance metrics, and can write these to file.
 
     :param sem_kwargs: (dictionary) specify the SEM parameters
     :param stories_kwargs: (dictionary) specify the parameters for the stories
     :param n_batches: (int, default=8), a batch is one each of sample of each condition specified
     :param n_train: (int, default=160)
     :param n_test: (int, default=40)
-    :param progress_bar: (bool, default=True) show a progress bar for each batch/condition 
-                        (just says "Run SEM")
-    :param sem_progress_bar:    (bool, default=False) show a progress bar for all 
-                                of the simulations (dont use with progress_bar = True)
-    :param debug: (bool, default=False), only run the 1st two blocks of trials
-    :param save_to_json: (bool, default=False), save results to file (good for running on a server)
-    :param json_tag: (str, default=''), add a file tag to the results
-    :param json_file_path: (str, default='./') specify a path to write to file
     :param no_split: (bool, default=False) use the no-split version of the code (i.e. run as a NN model)
-    :param condensed_output: (bool, default=True), if True, output much larger set of analyses.
-                              Should be set to False
+    :param condition: (str), {'blocked','interleaved','early',
+        'middle','late','instructed_interleaved','instructed_blocked'}
     """
+    np.random.seed(seed)
 
     stories_kwargs['n_train'] = n_train
     stories_kwargs['n_test'] = n_test
@@ -479,94 +472,48 @@ def batch_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40,
     prediction_err = []
     trialXtrial = []
 
-    # this code just controls the presence/absence of a progress bar -- it isn't important
-    if progress_bar:
-        def my_it(l):
-            return tqdm(range(l), desc='Batches')
+    print('seed',seed,'condition',condition)
+
+    ## helper function, used later ##
+    # add batch number and condition to all of the results
+    def add_batch_cond(json_data):
+        for ii in range(len(json_data)):
+            json_data[ii]['seed'] = seed
+            json_data[ii]['condition'] = condition
+        return json_data
+    ##  ~~~~~~~~~~~~~~~~~~~~~~~~  ##
+
+    if condition == "instructed_interleaved": # instructed interleaved
+        stories_kwargs['instructions_weight'] = 1.0
+        x, y, e, _ = generate_exp("interleaved", **stories_kwargs)
+    elif condition == "instructed_blocked": # instructed blocked
+        stories_kwargs['instructions_weight'] = 1.0
+        x, y, e, _ = generate_exp("blocked", **stories_kwargs)
     else:
-        def my_it(l):
-            return range(l)
+        stories_kwargs['instructions_weight'] = 0.0
+        x, y, e, _ = generate_exp(condition, **stories_kwargs)
 
-    for kk in my_it(n_batch):  
+    ## run the model
+    run_kwargs = dict(save_x_hat=True, progress_bar=False)
 
-        for condition in conditions:
-            print('batch_num',kk,'condition',condition)
-
-            ## helper function, used later ##
-            # add batch number and condition to all of the results
-            def add_batch_cond(json_data):
-                for ii in range(len(json_data)):
-                    json_data[ii]['batch'] = kk
-                    json_data[ii]['Condition'] = condition
-                return json_data
-            ##  ~~~~~~~~~~~~~~~~~~~~~~~~  ##
-
-            if condition == "instructed_interleaved": # instructed interleaved
-                stories_kwargs['instructions_weight'] = 1.0
-                x, y, e, _ = generate_exp("interleaved", **stories_kwargs)
-            elif condition == "instructed_blocked": # instructed blocked
-                stories_kwargs['instructions_weight'] = 1.0
-                x, y, e, _ = generate_exp("blocked", **stories_kwargs)
-            else:
-                stories_kwargs['instructions_weight'] = 0.0
-                x, y, e, _ = generate_exp(condition, **stories_kwargs)
-
-            ## run the model
-            run_kwargs = dict(save_x_hat=True, progress_bar=sem_progress_bar)
-
-            if not no_split:
-                _sem_results = sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
-            else:
-                _sem_results = no_split_sem_run_with_boundaries(x, sem_kwargs, run_kwargs)
-            _sem_results.x_orig = np.concatenate(x)
-
-            if condensed_output:
-                _res, _trialX = score_results(_sem_results, e, y, n_train=n_train, n_test=n_test, 
-                    condensed=condensed_output)
-                
-                _res = add_batch_cond(_res)
-                _trialX = add_batch_cond(_trialX)
-
-                results += _res
-                trialXtrial += _trialX
-
-                if save_to_json:
-                    # save the intermediate results
-                    with open('{}results{}.json'.format(json_file_path, json_tag), 'w') as fp:
-                        json.dump(results, fp)
-
-                    # save the trialXtrial data to a csv file for space efficiency
-                    pd.DataFrame(trialXtrial).to_csv('{}trial_X_trial{}.csv'.format(json_file_path, json_tag),
-                    index=False)
-            else:
-                _res, _bound, _pred = score_results(_sem_results, e, y, n_train=n_train, n_test=n_test)
-
-                _res = add_batch_cond(_res)
-                _bound = add_batch_cond(_bound)
-                _pred = add_batch_cond(_pred)
-
-                results += _res
-                boundaries += _bound
-                prediction_err += _pred
-
-                if save_to_json:
-                    # save the intermediate results
-                    with open('{}results{}.json'.format(json_file_path, json_tag), 'w') as fp:
-                        json.dump(results, fp)
-
-                    with open('{}boundaries{}.json'.format(json_file_path, json_tag), 'w') as fp:
-                        json.dump(boundaries, fp)
-                    with open('{}prediction_err{}.json'.format(json_file_path, json_tag), 'w') as fp:
-                        json.dump(prediction_err, fp)
-
-    if condensed_output:
-        output = (results, trialXtrial, None)
+    if not no_split:
+        _sem_results = sem_run_with_boundaries(
+            x, sem_kwargs, run_kwargs)
     else:
-        output = (results, boundaries, prediction_err)
+        _sem_results = no_split_sem_run_with_boundaries(
+            x, sem_kwargs, run_kwargs)
+    _sem_results.x_orig = np.concatenate(x)
 
-    if not save_to_json:
-        return output
-    return None, None, None
+    ## scores results
+    _res, _trialX = score_results(_sem_results, e, y, 
+        n_train=n_train, n_test=n_test, condensed=True)
+    
+    results += add_batch_cond(_res)
+    trialXtrial += add_batch_cond(_trialX)
+
+
+    output = (results, trialXtrial, None)
+    return output
 
 
 if __name__ == "__main__":

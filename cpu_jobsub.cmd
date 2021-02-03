@@ -16,7 +16,7 @@ seed="${1}"
 lr="${2}"
 epoch="${3}"
 
-srun python PY-run_simulations.py "${seed}" "${lr}" "${epoch}" 
+srun python PY-LSTMbatchexp.py.py "${seed}" "${lr}" "${epoch}" 
 
 sacct --format="CPUTime,MaxRSS"
 

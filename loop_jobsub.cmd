@@ -6,7 +6,7 @@ declare -a epoch_arr=(1 2 4 8 16 32 64)
 
 for lr in "${lr_arr[@]}"; do 
   for epoch in "${epoch_arr[@]}"; do 
-    for seed in {1..20}; do 
+    for seed in {1..100}; do 
       sbatch cpu_jobsub.cmd "${seed}" "${lr}" "${epoch}"
     done
   done

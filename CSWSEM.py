@@ -446,7 +446,7 @@ def score_results(results, e, y, n_train=160, n_test=40, condensed=False):
 
 
 def seed_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40, 
-    no_split=False, seed=99, condition='blocked'):
+    model_type='SEM', seed=99, condition='blocked'):
     """
     Function generates random tasks and runs the model on them.  
     Returns relevant performance metrics, and can write these to file.
@@ -494,10 +494,10 @@ def seed_exp(sem_kwargs, stories_kwargs, n_batch=8, n_train=160, n_test=40,
     ## run the model
     run_kwargs = dict(save_x_hat=True, progress_bar=False)
 
-    if not no_split:
+    if model_type == 'SEM':
         _sem_results = sem_run_with_boundaries(
             x, sem_kwargs, run_kwargs)
-    else:
+    elif model_type == 'LSTM':
         _sem_results = no_split_sem_run_with_boundaries(
             x, sem_kwargs, run_kwargs)
     _sem_results.x_orig = np.concatenate(x)

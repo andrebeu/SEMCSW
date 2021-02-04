@@ -31,7 +31,8 @@ def logsumexp_mean(x):
     """ return the log of the mean, given a 1-d array of log values"""
     return logsumexp(x) - np.log(len(x))
 
-def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embedding_library=None, actor_weight=1.0, instructions_weight=0.0):
+def generate_exp(condition, n_train=160, n_test=40, embedding_library=None, 
+    actor_weight=1.0, instructions_weight=0.0, err=0.1):
     """
     :param condition: (str), either 'blocked', 'interleaved', 'early', 'middle', or 'late'
     :param seed: (int), random seed for consistency
@@ -84,10 +85,12 @@ def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embeddin
 
 
     """
-
-    if seed is not None:
-        assert type(seed) == int
-        np.random.seed(seed)
+    if condition == "instructed_interleaved": # instructed interleaved
+        stories_kwargs['instructions_weight'] = 1.0
+    elif condition == "instructed_blocked": # instructed blocked
+        stories_kwargs['instructions_weight'] = 1.0
+    else:
+        stories_kwargs['instructions_weight'] = 0.0
 
     # transition functions are defined T(s, s') = p
     # "Brew house" stories
@@ -450,7 +453,7 @@ def seed_exp(sem_kwargs, n_train=160, n_test=40,
     Function generates random tasks and runs the model on them.  
     Returns relevant performance metrics, and can write these to file.
 
-    :param sem_kwargs: (dictionary) specify the SEM parameters
+    :param sem_kwargs: (dictionary) contains optimizer and nn params
     :param stories_kwargs: (dictionary) specify the parameters for the stories
     :param n_train: (int, default=160)
     :param n_test: (int, default=40)
@@ -480,17 +483,14 @@ def seed_exp(sem_kwargs, n_train=160, n_test=40,
         return json_data
     ##  ~~~~~~~~~~~~~~~~~~~~~~~~  ##
 
-    if condition == "instructed_interleaved": # instructed interleaved
-        stories_kwargs['instructions_weight'] = 1.0
-    elif condition == "instructed_blocked": # instructed blocked
-        stories_kwargs['instructions_weight'] = 1.0
-    else:
-        stories_kwargs['instructions_weight'] = 0.0
+    # generate experiment
     x, y, e, _ = generate_exp(condition, **stories_kwargs)
 
     ## run the model
     run_kwargs = dict(save_x_hat=True, progress_bar=False)
-
+    """ task is predict next scene, 
+    therefore only pass x for training
+    """
     if model_type == 'SEM':
         _sem_results = sem_run_with_boundaries(
             x, sem_kwargs, run_kwargs)

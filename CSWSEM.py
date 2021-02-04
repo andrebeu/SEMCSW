@@ -85,12 +85,12 @@ def generate_exp(condition, n_train=160, n_test=40, embedding_library=None,
 
 
     """
-    if condition == "instructed_interleaved": # instructed interleaved
-        stories_kwargs['instructions_weight'] = 1.0
-    elif condition == "instructed_blocked": # instructed blocked
-        stories_kwargs['instructions_weight'] = 1.0
-    else:
-        stories_kwargs['instructions_weight'] = 0.0
+    # if condition == "instructed_interleaved": # instructed interleaved
+    #     stories_kwargs['instructions_weight'] = 1.0
+    # elif condition == "instructed_blocked": # instructed blocked
+    #     stories_kwargs['instructions_weight'] = 1.0
+    # else:
+    #     stories_kwargs['instructions_weight'] = 0.0
 
     # transition functions are defined T(s, s') = p
     # "Brew house" stories
@@ -206,7 +206,8 @@ def generate_exp(condition, n_train=160, n_test=40, embedding_library=None,
     d = n_verbs
     
     if embedding_library is None:
-        embedding_library = get_embedding_library(d,n_verbs)
+        embedding_library = get_embedding_library(
+            d,n_verbs,n_train,n_test)
         
 
     keys = list(embedding_library.keys())

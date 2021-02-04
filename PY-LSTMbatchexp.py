@@ -7,10 +7,6 @@
 
 
 import sys
-# print("Python version")
-# print (sys.version)
-
-# %matplotlib inline
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -26,6 +22,10 @@ from scipy.special import logsumexp
 from scipy.stats import norm
 from glob import glob
 
+
+# In[2]:
+
+
 from CSWSEM import generate_exp, seed_exp
 from vanilla_lstm import VanillaLSTM
 from sem.event_models import NonLinearEvent
@@ -33,25 +33,35 @@ from sem.event_models import NonLinearEvent
 
 # ### gridsearch params 
 
+# In[3]:
 
-# param search over
+
+# parameter search over lr, n_epochs, alpha, lambda
+model_type        = str('LSTM')
 seed              = int(sys.argv[1])
 lr                = float(sys.argv[2])
-n_epochs          = int(sys.argv[3])   
+n_epochs          = int(sys.argv[3])    
 
-# model params 
-model_type        = str('LSTM')
+
+# In[4]:
+
+
 log_alpha         = float(0.0)  # sCRP alpha is set in log scale
 log_lambda        = float(0.0)  # sCRP lambda is set in log scale
 
-# taks params
-condition = 'single'
-n_train = 200
-n_test = 10
+
+# In[5]:
 
 
+condition = 'blocked'
+n_train = 160
+n_test = 40
 
-save_dir = 'gsdata/lstm1/'
+
+# In[6]:
+
+
+save_dir = 'gsdata/lstm2_aw0/'
 model_tag = "%s_cond_%s_lr_%.3f_nepchs_%i_alpha_%.3f-lambda_%.3f_seed_%i"%(
   model_type,condition,lr,n_epochs,log_alpha,log_lambda,seed
 )
@@ -59,6 +69,9 @@ print(model_tag)
 
 
 # ### SEM configuration
+
+# In[7]:
+
 
 optimizer_kwargs = dict(
     lr=lr, beta_1=0.9, beta_2=0.999, epsilon=1e-5, amsgrad=False
@@ -73,14 +86,12 @@ f_opts=dict(
   optimizer_kwargs=optimizer_kwargs
 )
 
-f_class = VanillaLSTM # event model class
-
 # final param dict
 sem_kwargs = dict(
   lmda=np.exp(log_lambda), 
   alfa=np.exp(log_alpha), 
   f_opts=f_opts, 
-  f_class=f_class
+  f_class=VanillaLSTM
 )
 
 
@@ -88,21 +99,22 @@ sem_kwargs = dict(
 # 
 # main fun call
 
-# In[6]:
+# In[ ]:
 
 
 """ 
 main fun call
 """
-
+stories_kwargs = {'actor_weight':0.0}
 results, trialXtrial, _ = seed_exp( 
-              sem_kwargs, model_type=model_type, 
+              sem_kwargs, stories_kwargs=stories_kwargs,
+              model_type=model_type, 
               n_train=n_train, n_test=n_test,
               condition=condition,seed=seed,
 )
 
 
-# In[7]:
+# In[ ]:
 
 
 # convert from JSON file format (dict) to pandas df
@@ -113,14 +125,14 @@ trialXtrial = pd.DataFrame(trialXtrial)
 # # save
 # 
 
-# In[10]:
+# In[ ]:
 
 
 results_fpath = save_dir + "results_" + model_tag + '.csv'
 trial_fpath = save_dir + "trial_X_trial_" + model_tag + '.csv'
 
 
-# In[11]:
+# In[ ]:
 
 
 results.to_csv(results_fpath)

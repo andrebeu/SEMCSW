@@ -444,7 +444,7 @@ def score_results(results, e, y, n_train=160, n_test=40, condensed=False):
         return results, trial_by_trial
 
 
-def seed_exp(sem_kwargs, n_train=160, n_test=40, 
+def seed_exp(sem_kwargs, stories_kwargs=None, n_train=160, n_test=40, 
     model_type='SEM', seed=99, condition='blocked'):
     """
     Function generates random tasks and runs the model on them.  
@@ -460,7 +460,8 @@ def seed_exp(sem_kwargs, n_train=160, n_test=40,
     """
     np.random.seed(seed)
 
-    stories_kwargs = {}
+    if stories_kwargs == None:
+        stories_kwargs = {}
     stories_kwargs['n_train'] = n_train
     stories_kwargs['n_test'] = n_test
     

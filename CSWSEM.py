@@ -206,22 +206,8 @@ def generate_exp(condition, n_train=160, n_test=40, embedding_library=None,
     d = n_verbs
     
     if embedding_library is None:
-        verb_property = embed_gaussian(d)
-        agent_property = embed_gaussian(d)
-
-        # when combining terms, devide by sqrt(n_terms) to keep expected length ~1.0
-        embedding_library = {
-            'Verb{}'.format(ii): (embed_gaussian(d) + verb_property) / np.sqrt(2.0) 
-            for ii in range(n_verbs)
-        }
-        embedding_library.update({
-            'Actor{}'.format(ii): (embed_gaussian(d) + agent_property)  / np.sqrt(2.0) 
-            for ii in range(n_train + n_test)
-        })
-
-        embedding_library.update({
-            'Schema{}'.format(ii): embed_gaussian(d)  for ii in [0, 1]
-        })
+        embedding_library = get_embedding_library(d,n_verbs)
+        
 
     keys = list(embedding_library.keys())
     keys.sort()
@@ -249,7 +235,27 @@ def generate_exp(condition, n_train=160, n_test=40, embedding_library=None,
     return x, np.array(y), e, embedding_library
 
 
+def get_embedding_library(embed_dim,n_verbs,n_train,n_test):
+    """ ELib is dict 
+    keys: schema0,schema1, 
+        verb 0 - 9, actor 0 - (n_train+n_test)
+    """
+    verb_property = embed_gaussian(embed_dim)
+    agent_property = embed_gaussian(embed_dim)
 
+    # when combining terms, devide by sqrt(n_terms) to keep expected length ~1.0
+    embedding_library = {
+        'Verb{}'.format(ii): (embed_gaussian(embed_dim) + verb_property) / np.sqrt(2.0) 
+        for ii in range(n_verbs)
+    }
+    embedding_library.update({
+        'Actor{}'.format(ii): (embed_gaussian(embed_dim) + agent_property)  / np.sqrt(2.0) 
+        for ii in range(n_train + n_test)
+    })
+    embedding_library.update({
+        'Schema{}'.format(ii): embed_gaussian(embed_dim)  for ii in [0, 1]
+    })
+    return embedding_library
 
 def get_new_event_prob(e_hat):
     return np.array([True] + [e_hat[ii] not in set(e_hat[:ii]) for ii in range(1, len(e_hat))])

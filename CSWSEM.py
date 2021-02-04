@@ -31,7 +31,8 @@ def logsumexp_mean(x):
     """ return the log of the mean, given a 1-d array of log values"""
     return logsumexp(x) - np.log(len(x))
 
-def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embedding_library=None, actor_weight=1.0, instructions_weight=0.0):
+def generate_exp(condition, n_train=160, n_test=40, embedding_library=None, 
+    actor_weight=1.0, instructions_weight=0.0, err=0.1):
     """
     :param condition: (str), either 'blocked', 'interleaved', 'early', 'middle', or 'late'
     :param seed: (int), random seed for consistency
@@ -84,10 +85,12 @@ def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embeddin
 
 
     """
-
-    if seed is not None:
-        assert type(seed) == int
-        np.random.seed(seed)
+    if condition == "instructed_interleaved": # instructed interleaved
+        stories_kwargs['instructions_weight'] = 1.0
+    elif condition == "instructed_blocked": # instructed blocked
+        stories_kwargs['instructions_weight'] = 1.0
+    else:
+        stories_kwargs['instructions_weight'] = 0.0
 
     # transition functions are defined T(s, s') = p
     # "Brew house" stories
@@ -203,22 +206,8 @@ def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embeddin
     d = n_verbs
     
     if embedding_library is None:
-        verb_property = embed_gaussian(d)
-        agent_property = embed_gaussian(d)
-
-        # when combining terms, devide by sqrt(n_terms) to keep expected length ~1.0
-        embedding_library = {
-            'Verb{}'.format(ii): (embed_gaussian(d) + verb_property) / np.sqrt(2.0) 
-            for ii in range(n_verbs)
-        }
-        embedding_library.update({
-            'Actor{}'.format(ii): (embed_gaussian(d) + agent_property)  / np.sqrt(2.0) 
-            for ii in range(n_train + n_test)
-        })
-
-        embedding_library.update({
-            'Schema{}'.format(ii): embed_gaussian(d)  for ii in [0, 1]
-        })
+        embedding_library = get_embedding_library(d,n_verbs)
+        
 
     keys = list(embedding_library.keys())
     keys.sort()
@@ -245,6 +234,28 @@ def generate_exp(condition, seed=None, err=0.1, n_train=160, n_test=40, embeddin
 
     return x, np.array(y), e, embedding_library
 
+
+def get_embedding_library(embed_dim,n_verbs,n_train,n_test):
+    """ ELib is dict 
+    keys: schema0,schema1, 
+        verb 0 - 9, actor 0 - (n_train+n_test)
+    """
+    verb_property = embed_gaussian(embed_dim)
+    agent_property = embed_gaussian(embed_dim)
+
+    # when combining terms, devide by sqrt(n_terms) to keep expected length ~1.0
+    embedding_library = {
+        'Verb{}'.format(ii): (embed_gaussian(embed_dim) + verb_property) / np.sqrt(2.0) 
+        for ii in range(n_verbs)
+    }
+    embedding_library.update({
+        'Actor{}'.format(ii): (embed_gaussian(embed_dim) + agent_property)  / np.sqrt(2.0) 
+        for ii in range(n_train + n_test)
+    })
+    embedding_library.update({
+        'Schema{}'.format(ii): embed_gaussian(embed_dim)  for ii in [0, 1]
+    })
+    return embedding_library
 
 def get_new_event_prob(e_hat):
     return np.array([True] + [e_hat[ii] not in set(e_hat[:ii]) for ii in range(1, len(e_hat))])
@@ -450,7 +461,7 @@ def seed_exp(sem_kwargs, stories_kwargs=None, n_train=160, n_test=40,
     Function generates random tasks and runs the model on them.  
     Returns relevant performance metrics, and can write these to file.
 
-    :param sem_kwargs: (dictionary) specify the SEM parameters
+    :param sem_kwargs: (dictionary) contains optimizer and nn params
     :param stories_kwargs: (dictionary) specify the parameters for the stories
     :param n_train: (int, default=160)
     :param n_test: (int, default=40)
@@ -481,17 +492,14 @@ def seed_exp(sem_kwargs, stories_kwargs=None, n_train=160, n_test=40,
         return json_data
     ##  ~~~~~~~~~~~~~~~~~~~~~~~~  ##
 
-    if condition == "instructed_interleaved": # instructed interleaved
-        stories_kwargs['instructions_weight'] = 1.0
-    elif condition == "instructed_blocked": # instructed blocked
-        stories_kwargs['instructions_weight'] = 1.0
-    else:
-        stories_kwargs['instructions_weight'] = 0.0
+    # generate experiment
     x, y, e, _ = generate_exp(condition, **stories_kwargs)
 
     ## run the model
     run_kwargs = dict(save_x_hat=True, progress_bar=False)
-
+    """ task is predict next scene, 
+    therefore only pass x for training
+    """
     if model_type == 'SEM':
         _sem_results = sem_run_with_boundaries(
             x, sem_kwargs, run_kwargs)

@@ -31,8 +31,9 @@ def logsumexp_mean(x):
     """ return the log of the mean, given a 1-d array of log values"""
     return logsumexp(x) - np.log(len(x))
 
+
 def generate_exp(condition, n_train=160, n_test=40, embedding_library=None, 
-    actor_weight=1.0, instructions_weight=0.0, err=0.1):
+    actor_weight=0.0, instructions_weight=0.0, err=0.1):
     """
     :param condition: (str), either 'blocked', 'interleaved', 'early', 'middle', or 'late'
     :param seed: (int), random seed for consistency
@@ -257,6 +258,7 @@ def get_embedding_library(embed_dim,n_verbs,n_train,n_test):
         'Schema{}'.format(ii): embed_gaussian(embed_dim)  for ii in [0, 1]
     })
     return embedding_library
+
 
 def get_new_event_prob(e_hat):
     return np.array([True] + [e_hat[ii] not in set(e_hat[:ii]) for ii in range(1, len(e_hat))])

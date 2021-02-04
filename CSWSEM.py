@@ -249,6 +249,8 @@ def generate_exp(condition, n_train=160, n_test=40, embedding_library=None,
     return x, np.array(y), e, embedding_library
 
 
+
+
 def get_new_event_prob(e_hat):
     return np.array([True] + [e_hat[ii] not in set(e_hat[:ii]) for ii in range(1, len(e_hat))])
 

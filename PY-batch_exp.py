@@ -7,7 +7,6 @@
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-import tensorflow as tf
 import seaborn as sns
 from tqdm import tqdm
 from sklearn import metrics

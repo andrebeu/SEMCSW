@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#SBATCH -t 23:00:00   # runs for 48 hours (max)  
+#SBATCH -t 5:00:00   # runs for 48 hours (max)  
 #SBATCH -N 1         # node count 
 #SBATCH -c 1         # number of cores 
 #SBATCH --mem 4000
@@ -18,6 +18,7 @@ slurm_arr_idx=${SLURM_ARRAY_TASK_ID}
 
 # get param str
 param_str=`python get_param_jobsub.py ${slurm_arr_idx}`
+echo ${param_str}
 
 # submit job
 srun python PY-batch_exp.py "${model}" "${seed}" "${param_str}" 

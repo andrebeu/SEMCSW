@@ -3,7 +3,6 @@
 
 # In[1]:
 
-
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
@@ -44,7 +43,6 @@ n_epochs    = int(n_epochs)
 lr          = float(lr)
 log_alpha   = float(log_alpha)
 log_lambda  = float(log_lambda)
-seed        = int(seed)
 
 
 ## other vars

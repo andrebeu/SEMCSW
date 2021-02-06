@@ -36,8 +36,9 @@ from sem.event_models import NonLinearEvent
 # log_alpha         = float(sys.argv[5])  
 # log_lambda        = float(sys.argv[6])  
 
-seed              = int(sys.argv[1])
-param_str         = str(sys.argv[2])
+model_type  = str(sys.argv[1])
+seed        = int(sys.argv[2])
+param_str   = str(sys.argv[3])
 ## parse input param string
 n_epochs, lr, log_alpha, log_lambda = param_str.split()
 n_epochs    = int(n_epochs)

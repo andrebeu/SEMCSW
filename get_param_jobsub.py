@@ -2,6 +2,7 @@ import sys
 import itertools
 
 """
+controls the gridsearch parameter space
 given an index, return parameter string
 """ 
 

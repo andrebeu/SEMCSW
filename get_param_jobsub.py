@@ -15,7 +15,7 @@ lmbda =[-32, -16, -8, -4, -2, 0, 2, 4, 8, 16, 32]
 
 for idx,(i,j,k,l) in enumerate(itertools.product(ep,lr,alfa,lmbda)):
   if idx == param_set_idx:
-    print(i,j,j,l)
+    print(i,j,k,l)
     break
 
 

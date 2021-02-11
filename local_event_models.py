@@ -9,11 +9,8 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.backend import l2_normalize
 from sem.utils import fast_mvnorm_diagonal_logprob, unroll_data, get_prior_scale, delete_object_attributes
 
-
-print("TensorFlow Version: {}".format(tf.__version__))
-
 ### there are a ~ton~ of tf warnings from Keras, suppress them here
-
+print("TensorFlow Version: {}".format(tf.__version__))
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 
@@ -564,7 +561,6 @@ class RecurrentLinearEvent(LinearEvent):
 
             self.model.train_on_batch(x_batch, xp_batch)
         self.model_weights = self.model.get_weights()
-
 
 
 class CSWEvent(RecurrentLinearEvent):

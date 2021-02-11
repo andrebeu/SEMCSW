@@ -10,20 +10,97 @@ from multiprocessing import Queue, Process
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-from local_event_models import RecurrentLinearEvent
+from local_event_models import CSWEvent
 
 class Results(object):
     """ placeholder object to store results """
     pass
 
 """ 
-even == observation 
+event == observation 
 """
 
-class SEM(object):
+class BaseSEM(object):
+    
+    def __init__(self):
+        None
+
+    def _update_state(self, x, k=None):
+        """
+        Update internal state based on input data X and max # of event types (clusters) K
+        """
+        # get dimensions of data
+        [n, d] = np.shape(x)
+        if self.d is None:
+            self.d = d
+        else:
+            assert self.d == d  # scenes must be of same dimension
+
+        # get max # of clusters / event types
+        if k is None:
+            k = n
+        self.k = max(self.k, k)
+
+        # initialize CRP prior = running count of the clustering process
+        if self.c.size < self.k:
+            self.c = np.concatenate((self.c, np.zeros(self.k - self.c.size)), axis=0)
+        assert self.c.size == self.k
+
+    def clear_event_models(self):
+        if self.event_models is not None:
+            for _, e in self.event_models.items():
+                e.clear()
+                e.model = None
+            
+        self.event_models = None
+        self.model = None
+        tf.compat.v1.reset_default_graph()  # for being sure
+        tf.keras.backend.clear_session()
+
+    def _calculate_unnormed_sCRP(self, prev_cluster=None):
+        # internal function for consistency across "run" methods
+
+        # calculate sCRP prior
+        prior = self.c.copy()
+        idx = len(np.nonzero(self.c)[0])  # get number of visited clusters
+
+        if idx <= self.k:
+            prior[idx] += self.alfa  # set new cluster probability to alpha
+
+        # add stickiness parameter for n>0, only for the previously chosen event
+        if prev_cluster is not None:
+            prior[prev_cluster] += self.lmda
+
+        # prior /= np.sum(prior)
+        return prior
+
+    def init_for_boundaries(self, list_events):
+        # update internal state
+
+        k = 0
+        self._update_state(np.concatenate(list_events, axis=0), k)
+        del k  # use self.k and self.d
+
+        # store a compiled version of the model and session for reuse
+        if self.k_prev is None:
+
+            # initialize the first event model
+            new_model = self.f_class(self.d, **self.f_opts)
+            self.model = new_model.init_model()
+
+            self.event_models[0] = new_model
+
+    def clear(self):
+        """ This function deletes sem from memory"""
+        self.clear_event_models()
+        delete_object_attributes(self.results)
+        delete_object_attributes(self)
+
+
+class SEM(BaseSEM):
 
     def __init__(self, lmda=1., alfa=10.0, 
-        f_class=RecurrentLinearEvent, f_opts=None):
+        f_class=CSWEvent, f_opts=None):
         """
         Parameters
         ----------
@@ -66,44 +143,6 @@ class SEM(object):
 
         # instead of dumping the results, store them to the object
         self.results = None
-
-    def _update_state(self, x, k=None):
-        """
-        Update internal state based on input data X and max # of event types (clusters) K
-        """
-        # get dimensions of data
-        [n, d] = np.shape(x)
-        if self.d is None:
-            self.d = d
-        else:
-            assert self.d == d  # scenes must be of same dimension
-
-        # get max # of clusters / event types
-        if k is None:
-            k = n
-        self.k = max(self.k, k)
-
-        # initialize CRP prior = running count of the clustering process
-        if self.c.size < self.k:
-            self.c = np.concatenate((self.c, np.zeros(self.k - self.c.size)), axis=0)
-        assert self.c.size == self.k
-
-    def _calculate_unnormed_sCRP(self, prev_cluster=None):
-        # internal function for consistency across "run" methods
-
-        # calculate sCRP prior
-        prior = self.c.copy()
-        idx = len(np.nonzero(self.c)[0])  # get number of visited clusters
-
-        if idx <= self.k:
-            prior[idx] += self.alfa  # set new cluster probability to alpha
-
-        # add stickiness parameter for n>0, only for the previously chosen event
-        if prev_cluster is not None:
-            prior[prev_cluster] += self.lmda
-
-        # prior /= np.sum(prior)
-        return prior
 
     def update_single_event(self, x, update=True, save_x_hat=False):
         """
@@ -282,22 +321,6 @@ class SEM(object):
 
         return
 
-    def init_for_boundaries(self, list_events):
-        # update internal state
-
-        k = 0
-        self._update_state(np.concatenate(list_events, axis=0), k)
-        del k  # use self.k and self.d
-
-        # store a compiled version of the model and session for reuse
-        if self.k_prev is None:
-
-            # initialize the first event model
-            new_model = self.f_class(self.d, **self.f_opts)
-            self.model = new_model.init_model()
-
-            self.event_models[0] = new_model
-
     def run_w_boundaries(self, list_events, progress_bar=True, 
         leave_progress_bar=True, save_x_hat=False, 
         generative_predicitons=False, minimize_memory=False):
@@ -346,29 +369,11 @@ class SEM(object):
         if minimize_memory:
             self.clear_event_models()
 
-    def clear_event_models(self):
-        if self.event_models is not None:
-            for _, e in self.event_models.items():
-                e.clear()
-                e.model = None
-            
-        self.event_models = None
-        self.model = None
-        tf.compat.v1.reset_default_graph()  # for being sure
-        tf.keras.backend.clear_session()
+    
+class NoSplitSEM(BaseSEM):
 
-    def clear(self):
-        """ This function deletes sem from memory"""
-        self.clear_event_models()
-        delete_object_attributes(self.results)
-        delete_object_attributes(self)
-
-
-
-class NoSplitSEM(object):
-    """ This is a custom variant of SEM that doesn't allow for segementation"""
-
-    def __init__(self, lmda=1., alfa=10.0, f_class=RecurrentLinearEvent, f_opts=None):
+    def __init__(self, lmda=1., alfa=10.0, 
+        f_class=CSWEvent, f_opts=None):
         """
         Parameters
         ----------
@@ -411,44 +416,6 @@ class NoSplitSEM(object):
 
         # instead of dumping the results, store them to the object
         self.results = None
-
-    def _update_state(self, x, k=None):
-        """
-        Update internal state based on input data X and max # of event types (clusters) K
-        """
-        # get dimensions of data
-        [n, d] = np.shape(x)
-        if self.d is None:
-            self.d = d
-        else:
-            assert self.d == d  # scenes must be of same dimension
-
-        # get max # of clusters / event types
-        if k is None:
-            k = n
-        self.k = max(self.k, k)
-
-        # initialize CRP prior = running count of the clustering process
-        if self.c.size < self.k:
-            self.c = np.concatenate((self.c, np.zeros(self.k - self.c.size)), axis=0)
-        assert self.c.size == self.k
-
-    def _calculate_unnormed_sCRP(self, prev_cluster=None):
-        # internal function for consistency across "run" methods
-
-        # calculate sCRP prior
-        prior = self.c.copy()
-        idx = len(np.nonzero(self.c)[0])  # get number of visited clusters
-
-        if idx <= self.k:
-            prior[idx] += self.alfa  # set new cluster probability to alpha
-
-        # add stickiness parameter for n>0, only for the previously chosen event
-        if prev_cluster is not None:
-            prior[prev_cluster] += self.lmda
-
-        # prior /= np.sum(prior)
-        return prior
 
     def update_single_event(self, x, update=True, save_x_hat=False):
         """
@@ -622,24 +589,9 @@ class NoSplitSEM(object):
 
         return
 
-    def init_for_boundaries(self, list_events):
-        # update internal state
-
-        k = 0
-        self._update_state(np.concatenate(list_events, axis=0), k)
-        del k  # use self.k and self.d
-
-        # store a compiled version of the model and session for reuse
-        if self.k_prev is None:
-
-            # initialize the first event model
-            new_model = self.f_class(self.d, **self.f_opts)
-            self.model = new_model.init_model()
-
-            self.event_models[0] = new_model
-
-    def run_w_boundaries(self, list_events, progress_bar=True, leave_progress_bar=True, save_x_hat=False, 
-                         generative_predicitons=False, minimize_memory=False):
+    def run_w_boundaries(self, list_events, progress_bar=True, 
+        leave_progress_bar=True, save_x_hat=False, 
+        generative_predicitons=False, minimize_memory=False):
         """
         This method is the same as the above except the event boundaries are pre-specified by the experimenter
         as a list of event tokens (the event/schema type is still inferred).
@@ -685,22 +637,9 @@ class NoSplitSEM(object):
         if minimize_memory:
             self.clear_event_models()
 
-    def clear_event_models(self):
-        if self.event_models is not None:
-            for _, e in self.event_models.items():
-                e.clear()
-                e.model = None
-            
-        self.event_models = None
-        self.model = None
-        tf.compat.v1.reset_default_graph()  # for being sure
-        tf.keras.backend.clear_session()
+    
 
-    def clear(self):
-        """ This function deletes sem from memory"""
-        self.clear_event_models()
-        delete_object_attributes(self.results)
-        delete_object_attributes(self)
+    
 
 
 
@@ -728,7 +667,6 @@ def no_split_sem_run_with_boundaries(x, sem_init_kwargs=None, run_kwargs=None):
                 kwargs=dict(sem_init_kwargs=sem_init_kwargs, run_kwargs=run_kwargs))
     p.start()
     return q.get()
-
 
 def worker_run_with_boundaries(queue, x, sem_init_kwargs=None, run_kwargs=None):
     if sem_init_kwargs is None:

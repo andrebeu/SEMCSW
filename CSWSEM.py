@@ -14,9 +14,8 @@ from sklearn import preprocessing # used sparingly
 from scipy.special import logsumexp
 
 # SEM
-from sem import sem_run_with_boundaries, SEM
-from sem.hrr import plate_formula, encode, decode, embed_gaussian
-from sem.utils import fast_mvnorm_diagonal_logprob, get_prior_scale
+from sem.hrr import embed_gaussian
+from local_sem import sem_run_with_boundaries, SEM
 from no_split_sem import no_split_sem_run_with_boundaries, NoSplitSEM
 
 

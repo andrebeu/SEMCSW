@@ -2,9 +2,11 @@ import numpy as np
 import tensorflow as tf
 from scipy.special import logsumexp
 from tqdm import tqdm
-from sem.event_models import GRUEvent
+# from sem.event_models import GRUEvent
 from sem.utils import delete_object_attributes
 from multiprocessing import Queue, Process
+
+from local_event_models import RecurrentLinearEvent
 
 # there are a ~ton~ of tf warnings from Keras, suppress them here
 import os
@@ -19,7 +21,7 @@ class Results(object):
 class NoSplitSEM(object):
     """ This is a custom variant of SEM that doesn't allow for segementation"""
 
-    def __init__(self, lmda=1., alfa=10.0, f_class=GRUEvent, f_opts=None):
+    def __init__(self, lmda=1., alfa=10.0, f_class=RecurrentLinearEvent, f_opts=None):
         """
         Parameters
         ----------

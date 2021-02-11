@@ -2,23 +2,25 @@ import numpy as np
 import tensorflow as tf
 from scipy.special import logsumexp
 from tqdm import tqdm
-from local_event_models import GRUEvent
-# from .utils import delete_object_attributes
+# from local_event_models import GRUEvent
+from sem.utils import delete_object_attributes
 from multiprocessing import Queue, Process
 
 # there are a ~ton~ of tf warnings from Keras, suppress them here
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
+from local_event_models import RecurrentLinearEvent
 
 class Results(object):
     """ placeholder object to store results """
     pass
 
 
+
 class SEM(object):
 
-    def __init__(self, lmda=1., alfa=10.0, f_class=GRUEvent, f_opts=None):
+    def __init__(self, lmda=1., alfa=10.0, f_class=RecurrentLinearEvent, f_opts=None):
         """
         Parameters
         ----------
@@ -61,64 +63,6 @@ class SEM(object):
 
         # instead of dumping the results, store them to the object
         self.results = None
-
-    def pretrain(self, x, event_types, event_boundaries, progress_bar=True, leave_progress_bar=True):
-        """
-        Pretrain a bunch of event models on sequence of scenes X
-        with corresponding event labels y, assumed to be between 0 and K-1
-        where K = total # of distinct event types
-        """
-        assert x.shape[0] == event_types.size
-
-        # update internal state
-        k = np.max(event_types) + 1
-        self._update_state(x, k)
-        del k  # use self.k
-
-        n = x.shape[0]
-
-        # loop over all scenes
-        if progress_bar:
-            def my_it(l):
-                return tqdm(range(l), desc='Pretraining', leave=leave_progress_bar)
-        else:
-            def my_it(l):
-                return range(l)
-
-        # store a compiled version of the model and session for reuse
-        self.model = None
-
-        for ii in my_it(n):
-
-            x_curr = x[ii, :].copy()  # current scene
-            k = event_types[ii]  # current event
-
-            if k not in self.event_models.keys():
-                # initialize new event model
-                new_model = self.f_class(self.d, **self.f_opts)
-                if self.model is None:
-                    self.model = new_model.init_model()
-                else:
-                    new_model.set_model(self.model)
-                self.event_models[k] = new_model
-
-            # update event model
-            if not event_boundaries[ii]:
-                # we're in the same event -> update using previous scene
-                assert self.x_prev is not None
-                self.event_models[k].update(self.x_prev, x_curr, update_estimate=True)
-            else:
-                # we're in a new event -> update the initialization point only
-                self.event_models[k].new_token()
-                self.event_models[k].update_f0(x_curr, update_estimate=True)
-
-            self.c[k] += 1  # update counts
-
-            self.x_prev = x_curr  # store the current scene for next trial
-            self.k_prev = k  # store the current event for the next trial
-
-        self.x_prev = None  # Clear this for future use
-        self.k_prev = None  #
 
     def _update_state(self, x, k=None):
         """
@@ -612,6 +556,9 @@ class SEM(object):
         delete_object_attributes(self.results)
         delete_object_attributes(self)
 
+
+
+
 def worker_run(queue, x, sem_init_kwargs=None, run_kwargs=None):
     if sem_init_kwargs is None:
         sem_init_kwargs=dict()
@@ -621,6 +568,8 @@ def worker_run(queue, x, sem_init_kwargs=None, run_kwargs=None):
     sem_model = SEM(**sem_init_kwargs)
     sem_model.run(x, **run_kwargs)
     queue.put(sem_model.results)
+
+
 
 def sem_run(x, sem_init_kwargs=None, run_kwargs=None):
     """ this initailizes SEM, runs the main function 'run_w_boundaries', and

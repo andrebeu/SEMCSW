@@ -6,7 +6,7 @@ from tqdm import tqdm
 from sem.utils import delete_object_attributes
 from multiprocessing import Queue, Process
 
-from local_event_models import RecurrentLinearEvent
+
 
 # there are a ~ton~ of tf warnings from Keras, suppress them here
 import os

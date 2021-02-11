@@ -76,7 +76,7 @@ class BaseSEM(object):
 
     def init_for_boundaries(self, list_events):
         # update internal state
-
+        print('i_f_bound')
         k = 0
         self._update_state(np.concatenate(list_events, axis=0), k)
         del k  # use self.k and self.d
@@ -90,6 +90,103 @@ class BaseSEM(object):
 
             self.event_models[0] = new_model
 
+    def run_w_boundaries(self, list_events, progress_bar=True, 
+        leave_progress_bar=True, save_x_hat=False, 
+        generative_predicitons=False, minimize_memory=False):
+        """
+        This method is the same as the above except the event boundaries are pre-specified by the experimenter
+        as a list of event tokens (the event/schema type is still inferred).
+
+        One difference is that the event token-type association is bound at the last scene of an event type.
+        N.B. ! also, all of the updating is done at the event-token level.  There is no updating within an event!
+
+        evaluate the probability of each event over the whole token
+
+
+        Parameters
+        ----------
+        list_events: list of n x d arrays -- each an event
+
+
+        progress_bar: bool
+            use a tqdm progress bar?
+
+        leave_progress_bar: bool
+            leave the progress bar after completing?
+
+        save_x_hat: bool
+            save the MAP scene predictions?
+
+        Return
+        ------
+        post: n_e by k array of posterior probabilities
+
+        """
+        print('r_w_bound')
+
+        # loop through the other events in the list
+
+        self.init_for_boundaries(list_events)
+
+        for x in list_events:
+            self.update_single_event(x, save_x_hat=save_x_hat)
+        if minimize_memory:
+            self.clear_event_models()
+
+    def update_prior_and_posterior_of_event_model(self,x,save_x_hat):
+        """ 
+        """
+        n_scene = np.shape(x)[0]
+        ## update prior and posterior of event model
+        self.k += 1
+        self._update_state(x, self.k)
+
+        # pull the relevant items from the results
+        if self.results is None:
+            self.results = Results()
+            post = np.zeros((1, self.k))
+            log_like = np.zeros((1, self.k)) - np.inf
+            log_prior = np.zeros((1, self.k)) - np.inf
+            if save_x_hat:
+                x_hat = np.zeros((n_scene, self.d))
+                sigma = np.zeros((n_scene, self.d))
+                scene_log_like = np.zeros((n_scene, self.k)) - np.inf # for debugging
+        
+        else:
+            post = self.results.post
+            log_like = self.results.log_like
+            log_prior = self.results.log_prior
+
+            if save_x_hat:
+                x_hat = self.results.x_hat
+                sigma = self.results.sigma
+                scene_log_like = self.results.scene_log_like  # for debugging
+
+            # extend the size of the posterior, etc
+
+            n, k0 = np.shape(post)
+            while k0 < self.k:
+                post = np.concatenate([post, np.zeros((n, 1))], axis=1)
+                log_like = np.concatenate([log_like, np.zeros((n, 1)) - np.inf], axis=1)
+                log_prior = np.concatenate([log_prior, np.zeros((n, 1)) - np.inf], axis=1)
+                n, k0 = np.shape(post)
+
+                if save_x_hat:
+                    scene_log_like = np.concatenate([
+                        scene_log_like, np.zeros((np.shape(scene_log_like)[0], 1)) - np.inf
+                        ], axis=1)
+
+            # extend the size of the posterior, etc
+            post = np.concatenate([post, np.zeros((1, self.k))], axis=0)
+            log_like = np.concatenate([log_like, np.zeros((1, self.k)) - np.inf], axis=0)
+            log_prior = np.concatenate([log_prior, np.zeros((1, self.k)) - np.inf], axis=0)
+            if save_x_hat:
+                x_hat = np.concatenate([x_hat, np.zeros((n_scene, self.d))], axis=0)
+                sigma = np.concatenate([sigma, np.zeros((n_scene, self.d))], axis=0)
+                scene_log_like = np.concatenate([scene_log_like, np.zeros((n_scene, self.k)) - np.inf], axis=0)
+        
+        return log_like,log_prior,post,x_hat,sigma,scene_log_like
+
     def clear(self):
         """ This function deletes sem from memory"""
         self.clear_event_models()
@@ -97,6 +194,8 @@ class BaseSEM(object):
         delete_object_attributes(self)
 
 
+""" what is k? 
+"""
 class SEM(BaseSEM):
 
     def __init__(self, lmda=1., alfa=10.0, 
@@ -144,71 +243,24 @@ class SEM(BaseSEM):
         # instead of dumping the results, store them to the object
         self.results = None
 
+    
     def update_single_event(self, x, update=True, save_x_hat=False):
         """
 
         :param x: this is an n x d array of the n scenes in an event
         :param update: boolean (default True) update the prior and posterior of the event model
         :param save_x_hat: boolean (default False) normally, we don't save this as the interpretation can be tricky
-        N.b: unlike the posterior calculation, this is done at the level of individual scenes within the
-        events (and not one per event)
+            N.b: unlike the posterior calculation, this is done at the level of individual scenes within the
+            events (and not one per event)
         :return:
         """
 
         n_scene = np.shape(x)[0]
 
-        if update:
-            self.k += 1
-            self._update_state(x, self.k)
+        (log_like,log_prior,post,x_hat,sigma,scene_log_like
+            ) = self.update_prior_and_posterior_of_event_model(x,save_x_hat)
 
-            # pull the relevant items from the results
-            if self.results is None:
-                self.results = Results()
-                post = np.zeros((1, self.k))
-                log_like = np.zeros((1, self.k)) - np.inf
-                log_prior = np.zeros((1, self.k)) - np.inf
-                if save_x_hat:
-                    x_hat = np.zeros((n_scene, self.d))
-                    sigma = np.zeros((n_scene, self.d))
-                    scene_log_like = np.zeros((n_scene, self.k)) - np.inf # for debugging
-
-            else:
-                post = self.results.post
-                log_like = self.results.log_like
-                log_prior = self.results.log_prior
-                if save_x_hat:
-                    x_hat = self.results.x_hat
-                    sigma = self.results.sigma
-                    scene_log_like = self.results.scene_log_like  # for debugging
-
-                # extend the size of the posterior, etc
-
-                n, k0 = np.shape(post)
-                while k0 < self.k:
-                    post = np.concatenate([post, np.zeros((n, 1))], axis=1)
-                    log_like = np.concatenate([log_like, np.zeros((n, 1)) - np.inf], axis=1)
-                    log_prior = np.concatenate([log_prior, np.zeros((n, 1)) - np.inf], axis=1)
-                    n, k0 = np.shape(post)
-
-                    if save_x_hat:
-                        scene_log_like = np.concatenate([
-                            scene_log_like, np.zeros((np.shape(scene_log_like)[0], 1)) - np.inf
-                            ], axis=1)
-
-                # extend the size of the posterior, etc
-                post = np.concatenate([post, np.zeros((1, self.k))], axis=0)
-                log_like = np.concatenate([log_like, np.zeros((1, self.k)) - np.inf], axis=0)
-                log_prior = np.concatenate([log_prior, np.zeros((1, self.k)) - np.inf], axis=0)
-                if save_x_hat:
-                    x_hat = np.concatenate([x_hat, np.zeros((n_scene, self.d))], axis=0)
-                    sigma = np.concatenate([sigma, np.zeros((n_scene, self.d))], axis=0)
-                    scene_log_like = np.concatenate([scene_log_like, np.zeros((n_scene, self.k)) - np.inf], axis=0)
-
-        else:
-            log_like = np.zeros((1, self.k)) - np.inf
-            log_prior = np.zeros((1, self.k)) - np.inf
-
-        # calculate un-normed sCRP prior
+        # DELTA: calculate un-normed sCRP prior
         prior = self._calculate_unnormed_sCRP(self.k_prev)
 
         # likelihood
@@ -276,7 +328,6 @@ class SEM(BaseSEM):
                     lik[ii, k0] = model.log_likelihood_f0(x_curr)
             
 
-
         # cache the diagnostic measures
         log_like[-1, :len(active)] = np.sum(lik, axis=0)
 
@@ -287,7 +338,6 @@ class SEM(BaseSEM):
         # bayesian_surprise = logsumexp(lik + np.tile(log_prior[-1, :len(active)], (np.shape(lik)[0], 1)), axis=1)
 
         if update:
-
             # at the end of the event, find the winning model!
             log_post = log_prior[-1, :len(active)] + log_like[-1, :len(active)]
             post[-1, :len(active)] = np.exp(log_post - logsumexp(log_post))
@@ -320,54 +370,6 @@ class SEM(BaseSEM):
                 self.results.scene_log_like = scene_log_like
 
         return
-
-    def run_w_boundaries(self, list_events, progress_bar=True, 
-        leave_progress_bar=True, save_x_hat=False, 
-        generative_predicitons=False, minimize_memory=False):
-        """
-        This method is the same as the above except the event boundaries are pre-specified by the experimenter
-        as a list of event tokens (the event/schema type is still inferred).
-
-        One difference is that the event token-type association is bound at the last scene of an event type.
-        N.B. ! also, all of the updating is done at the event-token level.  There is no updating within an event!
-
-        evaluate the probability of each event over the whole token
-
-
-        Parameters
-        ----------
-        list_events: list of n x d arrays -- each an event
-
-
-        progress_bar: bool
-            use a tqdm progress bar?
-
-        leave_progress_bar: bool
-            leave the progress bar after completing?
-
-        save_x_hat: bool
-            save the MAP scene predictions?
-
-        Return
-        ------
-        post: n_e by k array of posterior probabilities
-
-        """
-
-        # loop through the other events in the list
-        if progress_bar:
-            def my_it(iterator):
-                return tqdm(iterator, desc='Run SEM', leave=leave_progress_bar)
-        else:
-            def my_it(iterator):
-                return iterator
-
-        self.init_for_boundaries(list_events)
-
-        for x in my_it(list_events):
-            self.update_single_event(x, save_x_hat=save_x_hat)
-        if minimize_memory:
-            self.clear_event_models()
 
     
 class NoSplitSEM(BaseSEM):
@@ -430,58 +432,10 @@ class NoSplitSEM(BaseSEM):
 
         n_scene = np.shape(x)[0]
 
-        if update:
-            self.k = 1
-            self._update_state(x, self.k)
+        (log_like,log_prior,post,x_hat,sigma,scene_log_like
+            ) = self.update_prior_and_posterior_of_event_model(x,save_x_hat)
 
-            # pull the relevant items from the results
-            if self.results is None:
-                self.results = Results()
-                post = np.zeros((1, self.k))
-                log_like = np.zeros((1, self.k)) - np.inf
-                log_prior = np.zeros((1, self.k)) - np.inf
-                if save_x_hat:
-                    x_hat = np.zeros((n_scene, self.d))
-                    sigma = np.zeros((n_scene, self.d))
-                    scene_log_like = np.zeros((n_scene, self.k)) - np.inf # for debugging
-
-            else:
-                post = self.results.post
-                log_like = self.results.log_like
-                log_prior = self.results.log_prior
-                if save_x_hat:
-                    x_hat = self.results.x_hat
-                    sigma = self.results.sigma
-                    scene_log_like = self.results.scene_log_like  # for debugging
-
-                # extend the size of the posterior, etc
-
-                n, k0 = np.shape(post)
-                while k0 < self.k:
-                    post = np.concatenate([post, np.zeros((n, 1))], axis=1)
-                    log_like = np.concatenate([log_like, np.zeros((n, 1)) - np.inf], axis=1)
-                    log_prior = np.concatenate([log_prior, np.zeros((n, 1)) - np.inf], axis=1)
-                    n, k0 = np.shape(post)
-
-                    if save_x_hat:
-                        scene_log_like = np.concatenate([
-                            scene_log_like, np.zeros((np.shape(scene_log_like)[0], 1)) - np.inf
-                            ], axis=1)
-
-                # extend the size of the posterior, etc
-                post = np.concatenate([post, np.zeros((1, self.k))], axis=0)
-                log_like = np.concatenate([log_like, np.zeros((1, self.k)) - np.inf], axis=0)
-                log_prior = np.concatenate([log_prior, np.zeros((1, self.k)) - np.inf], axis=0)
-                if save_x_hat:
-                    x_hat = np.concatenate([x_hat, np.zeros((n_scene, self.d))], axis=0)
-                    sigma = np.concatenate([sigma, np.zeros((n_scene, self.d))], axis=0)
-                    scene_log_like = np.concatenate([scene_log_like, np.zeros((n_scene, self.k)) - np.inf], axis=0)
-
-        else:
-            log_like = np.zeros((1, self.k)) - np.inf
-            log_prior = np.zeros((1, self.k)) - np.inf
-
-        # calculate un-normed sCRP prior
+        ## DELTA: calculate un-normed sCRP prior
         prior = [1]
 
         # likelihood
@@ -589,53 +543,7 @@ class NoSplitSEM(BaseSEM):
 
         return
 
-    def run_w_boundaries(self, list_events, progress_bar=True, 
-        leave_progress_bar=True, save_x_hat=False, 
-        generative_predicitons=False, minimize_memory=False):
-        """
-        This method is the same as the above except the event boundaries are pre-specified by the experimenter
-        as a list of event tokens (the event/schema type is still inferred).
-
-        One difference is that the event token-type association is bound at the last scene of an event type.
-        N.B. ! also, all of the updating is done at the event-token level.  There is no updating within an event!
-
-        evaluate the probability of each event over the whole token
-
-
-        Parameters
-        ----------
-        list_events: list of n x d arrays -- each an event
-
-
-        progress_bar: bool
-            use a tqdm progress bar?
-
-        leave_progress_bar: bool
-            leave the progress bar after completing?
-
-        save_x_hat: bool
-            save the MAP scene predictions?
-
-        Return
-        ------
-        post: n_e by k array of posterior probabilities
-
-        """
-
-        # loop through the other events in the list
-        if progress_bar:
-            def my_it(iterator):
-                return tqdm(iterator, desc='Run SEM', leave=leave_progress_bar)
-        else:
-            def my_it(iterator):
-                return iterator
-
-        self.init_for_boundaries(list_events)
-
-        for x in my_it(list_events):
-            self.update_single_event(x, save_x_hat=save_x_hat)
-        if minimize_memory:
-            self.clear_event_models()
+    
 
     
 

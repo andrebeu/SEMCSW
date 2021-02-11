@@ -23,6 +23,7 @@ event == observation
 class BaseSEM(object):
     
     def __init__(self):
+
         None
 
     def _update_state(self, x, k=None):
@@ -56,23 +57,6 @@ class BaseSEM(object):
         self.model = None
         tf.compat.v1.reset_default_graph()  # for being sure
         tf.keras.backend.clear_session()
-
-    def _calculate_unnormed_sCRP(self, prev_cluster=None):
-        # internal function for consistency across "run" methods
-
-        # calculate sCRP prior
-        prior = self.c.copy()
-        idx = len(np.nonzero(self.c)[0])  # get number of visited clusters
-
-        if idx <= self.k:
-            prior[idx] += self.alfa  # set new cluster probability to alpha
-
-        # add stickiness parameter for n>0, only for the previously chosen event
-        if prev_cluster is not None:
-            prior[prev_cluster] += self.lmda
-
-        # prior /= np.sum(prior)
-        return prior
 
     def init_for_boundaries(self, list_events):
         # update internal state
@@ -194,8 +178,10 @@ class BaseSEM(object):
         delete_object_attributes(self)
 
 
-""" what is k? 
+""" 
+what is k? 
 """
+
 class SEM(BaseSEM):
 
     def __init__(self, lmda=1., alfa=10.0, 
@@ -243,6 +229,22 @@ class SEM(BaseSEM):
         # instead of dumping the results, store them to the object
         self.results = None
 
+    def _calculate_unnormed_sCRP(self, prev_cluster=None):
+        # internal function for consistency across "run" methods
+
+        # calculate sCRP prior
+        prior = self.c.copy()
+        idx = len(np.nonzero(self.c)[0])  # get number of visited clusters
+
+        if idx <= self.k:
+            prior[idx] += self.alfa  # set new cluster probability to alpha
+
+        # add stickiness parameter for n>0, only for the previously chosen event
+        if prev_cluster is not None:
+            prior[prev_cluster] += self.lmda
+
+        # prior /= np.sum(prior)
+        return prior
     
     def update_single_event(self, x, update=True, save_x_hat=False):
         """
@@ -330,51 +332,50 @@ class SEM(BaseSEM):
 
         # cache the diagnostic measures
         log_like[-1, :len(active)] = np.sum(lik, axis=0)
-
         # calculate the log prior
         log_prior[-1, :len(active)] = np.log(prior[:len(active)])
 
-        # # calculate surprise
-        # bayesian_surprise = logsumexp(lik + np.tile(log_prior[-1, :len(active)], (np.shape(lik)[0], 1)), axis=1)
+        
+        ## DELTA: at the end of the event, find the winning model!
+        k = self.get_winning_model(post,log_prior,log_like,active)
+        # update the prior
+        self.c[k] += n_scene
+        # cache for next event
+        self.k_prev = k
+        # update the winning model's estimate
+        self.event_models[k].update_f0(x[0])
+        x_prev = x[0]
+        for X0 in x[1:]:
+            self.event_models[k].update(x_prev, X0)
+            x_prev = X0
+        self.results.log_like = log_like
+        self.results.log_prior = log_prior
+        self.results.e_hat = np.argmax(post, axis=1)
+        self.results.log_loss = logsumexp(log_like + log_prior, axis=1)
+        if save_x_hat:
+            x_hat[-n_scene:, :] = _x_hat
+            sigma[-n_scene:, :] = _sigma
+            scene_log_like[-n_scene:, :len(active)] = lik
+            self.results.x_hat = x_hat
+            self.results.sigma = sigma
+            self.results.scene_log_like = scene_log_like
 
-        if update:
-            # at the end of the event, find the winning model!
-            log_post = log_prior[-1, :len(active)] + log_like[-1, :len(active)]
-            post[-1, :len(active)] = np.exp(log_post - logsumexp(log_post))
-            k = np.argmax(log_post)
+        return None
 
-            # update the prior
-            self.c[k] += n_scene
-            # cache for next event
-            self.k_prev = k
-
-            # update the winning model's estimate
-            self.event_models[k].update_f0(x[0])
-            x_prev = x[0]
-            for X0 in x[1:]:
-                self.event_models[k].update(x_prev, X0)
-                x_prev = X0
-
-            self.results.post = post
-            self.results.log_like = log_like
-            self.results.log_prior = log_prior
-            self.results.e_hat = np.argmax(post, axis=1)
-            self.results.log_loss = logsumexp(log_like + log_prior, axis=1)
-
-            if save_x_hat:
-                x_hat[-n_scene:, :] = _x_hat
-                sigma[-n_scene:, :] = _sigma
-                scene_log_like[-n_scene:, :len(active)] = lik
-                self.results.x_hat = x_hat
-                self.results.sigma = sigma
-                self.results.scene_log_like = scene_log_like
-
-        return
+    def get_winning_model(self,post,log_prior,log_like,active):
+        """ splitting SEM uses argmax
+        nonsplitting SEM takes single event
+        """
+        log_post = log_prior[-1, :len(active)] + log_like[-1, :len(active)]
+        post[-1, :len(active)] = np.exp(log_post - logsumexp(log_post))
+        k = np.argmax(log_post)
+        self.results.post = post
+        return k
 
     
 class NoSplitSEM(BaseSEM):
 
-    def __init__(self, lmda=1., alfa=10.0, 
+    def __init__(self, lmda=None, alfa=None, 
         f_class=CSWEvent, f_opts=None):
         """
         Parameters
@@ -393,12 +394,7 @@ class NoSplitSEM(BaseSEM):
         f_opts: dictionary
             kwargs for initializing f_class
         """
-        self.lmda = lmda
-        self.alfa = alfa
         # self.beta = beta
-
-        if f_class is None:
-            raise ValueError("f_model must be specified!")
 
         self.f_class = f_class
         self.f_opts = f_opts
@@ -435,7 +431,7 @@ class NoSplitSEM(BaseSEM):
         (log_like,log_prior,post,x_hat,sigma,scene_log_like
             ) = self.update_prior_and_posterior_of_event_model(x,save_x_hat)
 
-        ## DELTA: calculate un-normed sCRP prior
+        ## DELTA: SEM calculates calculate un-normed sCRP prior
         prior = [1]
 
         # likelihood
@@ -448,7 +444,7 @@ class NoSplitSEM(BaseSEM):
             _x_hat = np.zeros((n_scene, self.d))  # temporary storre
             _sigma = np.zeros((n_scene, self.d))
 
-
+        ## loop over samples?
         for ii, x_curr in enumerate(x):
 
             # we need to maintain a distribution over possible event types for the current events --
@@ -498,57 +494,48 @@ class NoSplitSEM(BaseSEM):
                     lik[ii, k0] = model.log_likelihood_f0(x_curr)
             
 
-
         # cache the diagnostic measures
         log_like[-1, 0] = np.sum(lik, axis=0)
 
         # calculate the log prior
         log_prior[-1, :len(active)] = np.log(prior[:len(active)])
+        
+        ## delta: at the end of the event, find the winning model!
+        k = self.get_winning_model(post,log_prior,log_like,active)
+        
+        ## ~common
+        # update the prior
+        self.c[k] += n_scene
+        # cache for next event
+        self.k_prev = k
+        # update the winning model's estimate
+        self.event_models[k].update_f0(x[0])
+        x_prev = x[0]
+        for X0 in x[1:]:
+            self.event_models[k].update(x_prev, X0)
+            x_prev = X0
+        self.results.log_like = log_like
+        self.results.log_prior = log_prior
+        self.results.e_hat = np.argmax(post, axis=1)
+        self.results.log_loss = logsumexp(log_like + log_prior, axis=1)
+        if save_x_hat:
+            x_hat[-n_scene:, :] = _x_hat
+            sigma[-n_scene:, :] = _sigma
+            scene_log_like[-n_scene:, :len(active)] = lik
+            self.results.x_hat = x_hat
+            self.results.sigma = sigma
+            self.results.scene_log_like = scene_log_like
+        ## \~common
+        return None
 
-        # calculate surprise
-        bayesian_surprise = logsumexp(lik + np.tile(log_prior[-1, :len(active)], (np.shape(lik)[0], 1)), axis=1)
-
-        if update:
-
-            # at the end of the event, find the winning model!
-            log_post = log_prior[-1, :len(active)] + log_like[-1, :len(active)]
-            post[-1, :len(active)] = np.exp(log_post - logsumexp(log_post))
-            k = 0
-
-            # update the prior
-            self.c[k] += n_scene
-            # cache for next event
-            self.k_prev = k
-
-            # update the winning model's estimate
-            self.event_models[k].update_f0(x[0])
-            x_prev = x[0]
-            for X0 in x[1:]:
-                self.event_models[k].update(x_prev, X0)
-                x_prev = X0
-
-            self.results.post = post
-            self.results.log_like = log_like
-            self.results.log_prior = log_prior
-            self.results.e_hat = np.argmax(post, axis=1)
-            self.results.log_loss = logsumexp(log_like + log_prior, axis=1)
-
-            if save_x_hat:
-                x_hat[-n_scene:, :] = _x_hat
-                sigma[-n_scene:, :] = _sigma
-                scene_log_like[-n_scene:, :len(active)] = lik
-                self.results.x_hat = x_hat
-                self.results.sigma = sigma
-                self.results.scene_log_like = scene_log_like
-
-        return
+    def get_winning_model(self,post,log_prior,log_like,active):
+        log_post = log_prior[-1, :len(active)] + log_like[-1, :len(active)]
+        post[-1, :len(active)] = np.exp(log_post - logsumexp(log_post))
+        k = 0
+        self.results.post = post
+        return k
 
     
-
-    
-
-    
-
 
 
 def worker_run_with_boundaries(queue, x, sem_init_kwargs=None, run_kwargs=None):

@@ -15,8 +15,8 @@ from scipy.special import logsumexp
 
 # SEM
 from sem.hrr import embed_gaussian
-from local_sem import sem_run_with_boundaries, SEM
-from no_split_sem import no_split_sem_run_with_boundaries, NoSplitSEM
+from local_sem import SEM, NoSplitSEM
+from local_sem import sem_run_with_boundaries, no_split_sem_run_with_boundaries
 
 
 

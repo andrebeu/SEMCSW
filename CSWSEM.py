@@ -498,7 +498,7 @@ def seed_exp(sem_kwargs, stories_kwargs=None, n_train=160, n_test=40,
     x, y, e, _ = generate_exp(condition, **stories_kwargs)
 
     ## run the model
-    run_kwargs = dict(save_x_hat=True, progress_bar=False)
+    run_kwargs = dict()
     """ task is predict next scene, 
     therefore only pass x for training
     """

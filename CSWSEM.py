@@ -10,7 +10,7 @@ from multiprocessing import Queue, Process
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-from local_event_models import CSWEvent
+from cswRNN import CSWEvent
 
 class Results(object):
     """ placeholder object to store results """

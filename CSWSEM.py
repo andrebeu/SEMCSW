@@ -5,6 +5,7 @@ from tqdm import tqdm
 # from local_event_models import GRUEvent
 from sem.utils import delete_object_attributes
 from multiprocessing import Queue, Process
+# https://github.com/nicktfranklin/SEM2
 
 # there are a ~ton~ of tf warnings from Keras, suppress them here
 import os
@@ -39,7 +40,8 @@ class BaseSEM(object):
 
     def _update_state(self, x, k=None):
         """
-        Update internal state based on input data X and max # of event types (clusters) K
+        Update internal state based on input 
+        data X and max # of event types (clusters) K
         """
         # get dimensions of data
         [n, d] = np.shape(x)
@@ -89,11 +91,14 @@ class BaseSEM(object):
         leave_progress_bar=True, 
         generative_predicitons=False, minimize_memory=False):
         """
-        This method is the same as the above except the event boundaries are pre-specified by the experimenter
+        This method is the same as the above except the 
+        event boundaries are pre-specified by the experimenter
         as a list of event tokens (the event/schema type is still inferred).
 
-        One difference is that the event token-type association is bound at the last scene of an event type.
-        N.B. ! also, all of the updating is done at the event-token level.  There is no updating within an event!
+        One difference is that the event token-type 
+        association is bound at the last scene of an event type.
+        N.B. ! also, all of the updating is done at 
+        the event-token level.  There is no updating within an event!
 
         evaluate the probability of each event over the whole token
 
@@ -200,8 +205,6 @@ class BaseSEM(object):
         delete_object_attributes(self)
 
 
-
-
 class SEM(BaseSEM):
 
     def __init__(self, lmda=1., alfa=10.0, f_class=CSWEvent, f_opts=None):
@@ -284,12 +287,12 @@ class SEM(BaseSEM):
         active = np.nonzero(prior)[0]
 
         ## ~~ SEM select winning model
-        # schemas not updated here
+        # calculate likelihood of obs under each active model
         lik,_x_hat,_sigma = self.calculate_likelihoods(x,active,prior)
         # calculate log like and prior, used for deciding on event_model
         log_like[-1, :len(active)] = np.sum(lik, axis=0)
         log_prior[-1, :len(active)] = np.log(prior[:len(active)])
-        ## DELTA: at the end of the event, find the winning model!
+        # at the end of the event, find the winning model!
         k = active_model_idx = self.get_winning_model(post,log_prior,log_like,active)
         ## ~\~ SEM calculate eventmodel likes and select winning model
 
@@ -344,7 +347,8 @@ class SEM(BaseSEM):
             _sigma = np.zeros((n_scene, self.d))
 
         ### initialize array 
-        
+        """ iteratively calculate likelihood of each obs
+        """        
         lik = np.zeros((n_scene, len(active)))
 
         for ii, x_curr in enumerate(x):
@@ -383,9 +387,8 @@ class SEM(BaseSEM):
                     _x_hat[ii, :] = self.event_models[k_within_event].predict_next_generative(x[:ii, :])
                 _sigma[ii, :] = self.event_models[k_within_event].get_variance()
 
-
-            ## Inference: calculate likelihood of each active event model
             """
+            Inference: calculate likelihood of each active event model
             `log_likelihood_sequence` makes prediction using 
             and evaluates likelihood of prediction
             """
@@ -399,6 +402,8 @@ class SEM(BaseSEM):
                 else:
                     lik[ii, k0] = model.log_likelihood_f0(x_curr)
         return lik,_x_hat,_sigma
+
+
 
 
 

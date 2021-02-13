@@ -266,7 +266,7 @@ class SEM(BaseSEM):
             'self.prev_schema_idx',self.prev_schema_idx
             )
         ## case not previous not new
-        prior = self.schema_count.copy()
+        prior = self.schema_count.copy().astype(float)
         ## case previous event
         if self.prev_schema_idx!=None:
             prior[self.prev_schema_idx] += self.lmda
@@ -314,11 +314,15 @@ class SEM(BaseSEM):
 
         ## PRIOR CALCULATION
         prior = self._calculate_unnormed_sCRP(self.k_prev)
-        priorAB = self.get_crp_prior()
-        # print('-prior ',prior.astype(int))
-        print('AB-prior',priorAB)
+        prior_AB = self.get_crp_prior()
+        print('NF-prior',prior)
+        print('AB-prior',prior_AB)
+        # assert False
+        
+        # print('NF-prior ',prior.astype(int))
+        # print('AB-prior',prior_AB)
         # print('AB-schcount',self.schema_count)
-        assert np.alltrue(priorAB == prior.astype(int)[:len(priorAB)])
+        assert np.alltrue(prior_AB == prior[:len(prior_AB)])
 
         ## active
         active = np.nonzero(prior)[0]
@@ -333,18 +337,27 @@ class SEM(BaseSEM):
         # calculate log like and prior, used for deciding on event_model
         # calculate likelihood of obs under each active model
         lik,_x_hat,_sigma = self.calculate_likelihoods(x,active,prior)
-        like = self.calc_likelihood(event)
-        # print('NF-like',lik)
-        # print('AB-like',like)
+        log_like_AB = self.calc_likelihood(event) # (tsteps,schemas)
+        print('NF-like',lik)
+        print('AB-like',log_like_AB)
         if self.prev_schema_idx!=None:
-            assert (np.alltrue(like==lik))
+            assert (np.alltrue(log_like_AB==lik))
+        
+        # # lik is (tsteps x nschemas)
+        log_like_AB = np.sum(log_like_AB,axis=0)
+        log_like[-1, :self.n_schemas] = np.sum(lik, axis=0)
 
         ## select model 
-        log_like[-1, :self.n_schemas] = np.sum(lik, axis=0)
+        
         log_prior[-1, :self.n_schemas] = np.log(prior[:self.n_schemas])
+        log_prior_AB = np.log(prior_AB)
+        print('NF-logprior\n',log_prior)
+        print('AB-logprior\n',log_prior_AB)
         # at the end of the event, find the winning model!
         k = self.active_schema_idx = self.get_winning_model(post,log_prior,log_like)
-        print('active_schema_idx',k)
+        print('NF-schemaidx',k)
+        self.active_schema_idx = self.get_active_schema_idx(log_prior_AB,log_like_AB)
+        print('AB-schemaidx',self.active_schema_idx)
         ## ~\~ SEM calculate eventmodel likes and select winning model
 
         # cache for next event/story
@@ -392,6 +405,20 @@ class SEM(BaseSEM):
         post[-1, :self.n_schemas] = np.exp(log_post - logsumexp(log_post))
         k = np.argmax(log_post)
         self.results.post = post
+        return k
+
+    def get_active_schema_idx(self,log_prior,log_like):
+        """ 
+        splitting SEM uses argmax of posterior log probability
+        nonsplitting SEM takes single event
+        """
+        if self.prev_schema_idx==None:
+            # handle differences with NF indexing
+            return 0
+        log_post = log_prior + log_like
+        # post[-1, :self.n_schemas] = np.exp(log_post - logsumexp(log_post))
+        k = np.argmax(log_post)
+        # self.results.post = post
         return k
 
     def calculate_likelihoods(self,x,active,prior):
@@ -478,20 +505,21 @@ class SEM(BaseSEM):
         """
         event_len = event.shape[0]
         num_schemas = len(self.schlib)
-        like = np.zeros((event_len, num_schemas))
+        log_like = np.zeros((event_len, num_schemas))
         for tstep, obs in enumerate(event):
             for sch_idx in np.arange(num_schemas):
                 model = self.event_models[sch_idx]
                 if not tstep==0:
-                    like[tstep, sch_idx] = model.log_likelihood_sequence(
+                    log_like[tstep, sch_idx] = model.log_likelihood_sequence(
                         event[:tstep, :].reshape(-1, self.d), obs
                         )
                 else:
-                    like[tstep, sch_idx] = model.log_likelihood_f0(obs)
+                    log_like[tstep, sch_idx] = model.log_likelihood_f0(obs)
                 ## AB handles first obs differently from NTF
                 if self.prev_schema_idx == None:
                     break
-        return like
+
+        return log_like
 
 
 

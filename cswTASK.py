@@ -15,7 +15,7 @@ from scipy.special import logsumexp
 
 # SEM
 from sem.hrr import embed_gaussian
-from cswSEM import SEM, NoSplitSEM
+from cswSEM import SEM 
 from cswSEM import sem_run_with_boundaries, no_split_sem_run_with_boundaries
 
 

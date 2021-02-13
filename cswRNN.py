@@ -374,9 +374,9 @@ class CSWEvent(RecurrentLinearEvent):
                 return self.training_pairs[-1]
 
         # run batch gradient descent on all of the past events!
-        print('=')
+        # print('=')
         for _ in range(self.n_epochs):
-            print('==')
+            # print('==')
 
             # draw a set of training examples from the history
             x_batch = np.zeros((0, self.t, self.d))
@@ -384,11 +384,11 @@ class CSWEvent(RecurrentLinearEvent):
             for _ in range(self.batch_size):
 
                 x_sample, xp_sample = draw_sample_pair()
-                print('===',x_sample)
+                # print('===',x_sample)
 
                 x_batch = np.concatenate([x_batch, x_sample], axis=0)
                 xp_batch = np.concatenate([xp_batch, xp_sample], axis=0)
-            print('train')
+            # print('train')
             self.model.train_on_batch(x_batch, xp_batch)
         self.model_weights = self.model.get_weights()
 

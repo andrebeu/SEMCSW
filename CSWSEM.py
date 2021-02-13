@@ -20,9 +20,10 @@ import torch as tr
 """ 
 
 defn: schema is an rnn
-defn: event is A or B
+defn: event_type is A or B
 defn: state refers to csw states {1-8}
-defn: instance of state vector is obs
+defn: obs instance of state vector 
+defn: event sequence of obs. corresponds to story
 
 - k is max number of NTF models
 - - number of `event models` ?
@@ -240,30 +241,58 @@ class SEM(BaseSEM):
         self.obs_dim = 8 # state vector
         self.sch_stsize = 25
         self.lr = 0.1
-        self.schlib = [CSWNet(self.sch_stsize,self.seed)] # library of schemas
-        self.schema_active = self.schlib[0]
+        # schlib always has one "inactive" schema  
+        # similarly. dimensions of prior,likelihood,posterior
+        ## will be len(schlib) == 1+num_active_schemas
+        self.prior = np.array([self.alfa,self.alfa])
+        self.schema_count = np.array([0,0])
+        self.schlib = [
+            CSWNet(self.sch_stsize,self.seed),
+            CSWNet(self.sch_stsize,self.seed+1)
+            ] 
+        self.active_schema_idx = 0
+        self.prev_schema_idx = None
+        None 
 
+    def get_crp_prior(self):
+        """ 
+        - prior calculation relies on the `schema_count`
+            which is an array that counts number of times (#obs)
+            each schema was used 
+        - len(prior) == len(schlib)
+        """
+        print(
+            'num schemas',len(self.schlib),
+            'self.prev_schema_idx',self.prev_schema_idx
+            )
+        ## case not previous not new
+        prior = self.schema_count.copy()
+        ## case previous event
+        if self.prev_schema_idx!=None:
+            prior[self.prev_schema_idx] += self.lmda
+        else: # tstep0 
+            prior[0] = self.alfa
+        ## case new event
+        prior[-1] = self.alfa
+        assert len(prior) == len(self.schlib)
+        return prior
 
     def _calculate_unnormed_sCRP(self, prev_cluster=None):
         """ 
-        
+        self.k is max number of clusters
         """
         # internal function for consistency across "run" methods
-
         # calculate sCRP prior
         prior = self.c.copy()
         idx = len(np.nonzero(self.c)[0])  # get number of visited clusters
-
         if idx <= self.k:
             prior[idx] += self.alfa  # set new cluster probability to alpha
-
         # add stickiness parameter for n>0, only for the previously chosen event
         if prev_cluster is not None:
             prior[prev_cluster] += self.lmda
-
         # prior /= np.sum(prior)
         return prior
-    
+
     def update_single_event(self, x, update=True):
         """
         x: num_events x obs_dim
@@ -275,45 +304,62 @@ class SEM(BaseSEM):
         `prior`, `log_prior`, `log_like` all grow with num of events
             should grow with num of schemas
         """
-        print('=update single event')
+        print('\n=update single event')
 
         event = x 
-        event_len = np.shape(x)[0]
-
+        event_len = np.shape(event)[0]
+        
         (log_like,log_prior,post,x_hat,sigma,scene_log_like
             ) = self.update_prior_and_posterior_of_event_model(x)
 
-        """ 
-        todo: currently prior grows with number of obs
-        should only grow with number of schemas
-        """
+        ## PRIOR CALCULATION
         prior = self._calculate_unnormed_sCRP(self.k_prev)
-        print('-prior ',prior)
+        priorAB = self.get_crp_prior()
+        # print('-prior ',prior.astype(int))
+        print('AB-prior',priorAB)
+        # print('AB-schcount',self.schema_count)
+        assert np.alltrue(priorAB == prior.astype(int)[:len(priorAB)])
 
-        # initialize likelihoods
-        """ active is a list (range) of integers of models with nonzero priors 
-        """
+        ## active
         active = np.nonzero(prior)[0]
         self.n_schemas = len(active)
-
+        assert active[-1]==len(active)-1
+        # print('AB-schcount',self.schema_count)
+        # print('AB-numactive',len(self.schlib))
+        
         ## ~~ SEM select winning model
+
+        ### LIKELIHOOD CALCULATION
+        # calculate log like and prior, used for deciding on event_model
         # calculate likelihood of obs under each active model
         lik,_x_hat,_sigma = self.calculate_likelihoods(x,active,prior)
-        # calculate log like and prior, used for deciding on event_model
+        like = self.calc_likelihood(event)
+        # print('NF-like',lik)
+        # print('AB-like',like)
+        if self.prev_schema_idx!=None:
+            assert (np.alltrue(like==lik))
+
+        ## select model 
         log_like[-1, :self.n_schemas] = np.sum(lik, axis=0)
         log_prior[-1, :self.n_schemas] = np.log(prior[:self.n_schemas])
         # at the end of the event, find the winning model!
-        k = active_model_idx = self.get_winning_model(post,log_prior,log_like)
-        print('active_model_idx',active_model_idx)
-        print('lik',lik.shape)
-        print('len active',self.n_schemas)
+        k = self.active_schema_idx = self.get_winning_model(post,log_prior,log_like)
+        print('active_schema_idx',k)
         ## ~\~ SEM calculate eventmodel likes and select winning model
 
         # cache for next event/story
         self.k_prev = k
+        self.prev_schema_idx = self.active_schema_idx
         # update the prior
         self.c[k] += event_len
         
+        ## 
+        if self.active_schema_idx == len(self.schema_count)-1:
+            print('new active schema')
+            self.schema_count = np.concatenate([self.schema_count,[0]])
+            self.schlib.append(CSWNet(self.sch_stsize,self.seed))
+        self.schema_count[self.active_schema_idx] += event_len
+
         ## ~~ gradient update winning model weights
         # update with first observation
         self.event_models[k].update_f0(x[0])
@@ -350,11 +396,15 @@ class SEM(BaseSEM):
 
     def calculate_likelihoods(self,x,active,prior):
         """ 
-        updates `lik` which contains log likelihood of active models
+        updates `lik` which contains log likelihood of *all schemas*
+        NB NTF calculate lik of all active schemas and an extra schema 
         """
-        event_len = np.shape(x)[0]
-        # again, this is a readout of the model only and not used for updating,
-        # but also keep track of the within event posterior
+        event = x
+        event_len = np.shape(event)[0]
+        """ NTF
+        this is a readout of the model only and not used for updating,
+            but also keep track of the within event posterior
+        """
         _x_hat = np.zeros((event_len, self.d))  # temporary storre
         _sigma = np.zeros((event_len, self.d))
 
@@ -363,13 +413,16 @@ class SEM(BaseSEM):
         """        
         lik = np.zeros((event_len, self.n_schemas))
 
-        for ii, x_curr in enumerate(x):
+        for ii, x_curr in enumerate(event):
+            obs = x_curr
             # print('new obs')
-
-            # we need to maintain a distribution over possible event types for the current events --
-            # this gets locked down after termination of the event.
-            # Also: none of the event models can be updated until *after* the event has been observed
-
+            """ NTF
+            need to maintain a distribution over 
+            possible event types for the current events --
+            this gets locked down after termination of the event.
+            Also: none of the event models can be updated until 
+            *after* the event has been observed
+            """
             # special case the first scene within the event
             if ii == 0:
                 event_boundary = True
@@ -405,7 +458,9 @@ class SEM(BaseSEM):
             `log_likelihood_sequence` makes prediction using 
             and evaluates likelihood of prediction
             """
+            # print('NTF: eval lik of models',active)
             for k0 in active:
+
                 model = self.event_models[k0]
 
                 if not event_boundary:
@@ -416,6 +471,27 @@ class SEM(BaseSEM):
                     lik[ii, k0] = model.log_likelihood_f0(x_curr)
 
         return lik,_x_hat,_sigma
+
+    def calc_likelihood(self,event):
+        """ calculate likelihood for all schemas 
+            - active schemas + one inactive schema
+        """
+        event_len = event.shape[0]
+        num_schemas = len(self.schlib)
+        like = np.zeros((event_len, num_schemas))
+        for tstep, obs in enumerate(event):
+            for sch_idx in np.arange(num_schemas):
+                model = self.event_models[sch_idx]
+                if not tstep==0:
+                    like[tstep, sch_idx] = model.log_likelihood_sequence(
+                        event[:tstep, :].reshape(-1, self.d), obs
+                        )
+                else:
+                    like[tstep, sch_idx] = model.log_likelihood_f0(obs)
+                ## AB handles first obs differently from NTF
+                if self.prev_schema_idx == None:
+                    break
+        return like
 
 
 

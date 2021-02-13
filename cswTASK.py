@@ -13,7 +13,7 @@ from multiprocessing import Queue, Process
 
 # SEM
 from sem.hrr import embed_gaussian
-from cswSEM import SEM 
+from CSWSEM import SEM 
 # from cswSEM import sem_run_with_boundaries, no_split_sem_run_with_boundaries
 
 

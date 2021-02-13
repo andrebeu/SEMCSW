@@ -1,7 +1,3 @@
-"""
-
-"""
-
 import numpy as np
 import pandas as pd
 import json
@@ -13,11 +9,72 @@ from sklearn.linear_model import LogisticRegression
 from sklearn import preprocessing # used sparingly
 from scipy.special import logsumexp
 
+from multiprocessing import Queue, Process
+
 # SEM
 from sem.hrr import embed_gaussian
 from cswSEM import SEM 
-from cswSEM import sem_run_with_boundaries, no_split_sem_run_with_boundaries
+# from cswSEM import sem_run_with_boundaries, no_split_sem_run_with_boundaries
 
+
+
+def no_split_sem_worker(queue, x, sem_init_kwargs=None, run_kwargs=None):
+    if sem_init_kwargs is None:
+        sem_init_kwargs=dict()
+    if run_kwargs is None:
+        run_kwargs=dict()
+    
+    sem_model = NoSplitSEM(**sem_init_kwargs)
+    sem_model.run_w_boundaries(x, **run_kwargs)
+    queue.put(sem_model.results)
+
+
+def no_split_sem_run_with_boundaries(x, sem_init_kwargs=None, run_kwargs=None):
+    """ this initailizes SEM, runs the main function 'run_w_boundaries', and
+    returns the results object within a seperate process.
+    
+    See help on SEM class and on subfunction 'run_w_boundaries' for more detail on the 
+    parameters contained in 'sem_init_kwargs'  and 'run_kwargs', respectively.
+
+    """
+    
+    q = Queue()
+    p = Process(target=no_split_sem_worker, args=[q, x], 
+                kwargs=dict(sem_init_kwargs=sem_init_kwargs, run_kwargs=run_kwargs))
+    p.start()
+    return q.get()
+
+
+def sem_worker(queue, x, sem_init_kwargs=None, run_kwargs=None):
+    if sem_init_kwargs is None:
+        sem_init_kwargs=dict()
+    if run_kwargs is None:
+        run_kwargs=dict()
+    
+    sem_model = SEM(**sem_init_kwargs)
+    sem_model.run_w_boundaries(x, **run_kwargs)
+    queue.put(sem_model.results)
+
+
+def sem_run_with_boundaries(x, sem_init_kwargs=None, run_kwargs=None):
+    """ this initailizes SEM, runs the main function 'run_w_boundaries', and
+    returns the results object within a seperate process.
+    
+    See help on SEM class and on subfunction 
+    'run_w_boundaries' for more detail on the 
+    parameters contained in 'sem_init_kwargs'  
+    and 'run_kwargs', respectively.
+
+    """
+    
+    q = Queue()
+    p = Process(target=sem_worker, args=[q, x], 
+                kwargs=dict(
+                    sem_init_kwargs=sem_init_kwargs, 
+                    run_kwargs=run_kwargs)
+                )
+    p.start()
+    return q.get()
 
 
 

@@ -4,25 +4,27 @@ from scipy.special import logsumexp
 from tqdm import tqdm
 # from local_event_models import GRUEvent
 from sem.utils import delete_object_attributes
-from multiprocessing import Queue, Process
+
 # https://github.com/nicktfranklin/SEM2
 
 # there are a ~ton~ of tf warnings from Keras, suppress them here
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
+# NTF tensorflow implementation
 from cswRNN import CSWEvent
-
-class Results(object):
-    """ placeholder object to store results """
-    pass
+# AB pytorch implementation
+from CSW import CSWNet
+import torch as tr
 
 """ 
 
-defn: "event" is "story"
-defn: "state" is "state"
+defn: schema is an rnn
+defn: event is A or B
+defn: state refers to csw states {1-8}
+defn: instance of state vector is obs
 
-- what is k? 
+- k is max number of NTF models
 - - number of `event models` ?
 - `active` is an array of keys to 'active event models' ?
 - does this implementation initialize one model per trial?
@@ -32,7 +34,13 @@ resolve:
     fix this so that anything necessary for model execution
     is passed between funs or object attribute 
     results object should be only for recording/analysis
+
+procedure:
+- mark what methods are ready for tr implementation 
+2
 """
+
+
 
 class BaseSEM(object):
     
@@ -126,12 +134,12 @@ class BaseSEM(object):
             self.update_single_event(x)
         return None
 
-
     def update_prior_and_posterior_of_event_model(self,x):
-        """ messy fun. i think its calculating a bunch of 
-        stuff that is used to update the self object
+        """ 
+        only a few models are 'active', but here NTF expands dimension
+        of prior for every new event 
         """
-        n_scene = np.shape(x)[0]
+        event_len = np.shape(x)[0]
         ## update prior and posterior of event model
         self.k += 1
         self._update_state(x, self.k)
@@ -142,9 +150,9 @@ class BaseSEM(object):
             post = np.zeros((1, self.k))
             log_like = np.zeros((1, self.k)) - np.inf
             log_prior = np.zeros((1, self.k)) - np.inf
-            x_hat = np.zeros((n_scene, self.d))
-            sigma = np.zeros((n_scene, self.d))
-            scene_log_like = np.zeros((n_scene, self.k)) - np.inf # for debugging
+            x_hat = np.zeros((event_len, self.d))
+            sigma = np.zeros((event_len, self.d))
+            scene_log_like = np.zeros((event_len, self.k)) - np.inf # for debugging
         
         else:
             post = self.results.post
@@ -172,9 +180,9 @@ class BaseSEM(object):
             post = np.concatenate([post, np.zeros((1, self.k))], axis=0)
             log_like = np.concatenate([log_like, np.zeros((1, self.k)) - np.inf], axis=0)
             log_prior = np.concatenate([log_prior, np.zeros((1, self.k)) - np.inf], axis=0)
-            x_hat = np.concatenate([x_hat, np.zeros((n_scene, self.d))], axis=0)
-            sigma = np.concatenate([sigma, np.zeros((n_scene, self.d))], axis=0)
-            scene_log_like = np.concatenate([scene_log_like, np.zeros((n_scene, self.k)) - np.inf], axis=0)
+            x_hat = np.concatenate([x_hat, np.zeros((event_len, self.d))], axis=0)
+            sigma = np.concatenate([sigma, np.zeros((event_len, self.d))], axis=0)
+            scene_log_like = np.concatenate([scene_log_like, np.zeros((event_len, self.k)) - np.inf], axis=0)
         
         return log_like,log_prior,post,x_hat,sigma,scene_log_like
     
@@ -201,7 +209,7 @@ class BaseSEM(object):
 
 class SEM(BaseSEM):
 
-    def __init__(self, lmda=1., alfa=10.0, f_class=CSWEvent, f_opts=None):
+    def __init__(self, lmda=1., alfa=10.0, f_class=CSWEvent, f_opts=None, seed=99):
         """
         lmda: float
             sCRP stickiness parameter
@@ -213,35 +221,32 @@ class SEM(BaseSEM):
         f_opts: dictionary
             kwargs for initializing f_class
         """
-
-        self.lmda = lmda
-        self.alfa = alfa
-
-        if f_class is None:
-            raise ValueError("f_model must be specified!")
-
+        # NTF: SEM internal state
         self.f_class = f_class
         self.f_opts = f_opts
-
-        # SEM internal state
-        #
+        self.lmda = lmda
+        self.alfa = alfa
         self.k = 0  # maximum number of clusters (event types)
         self.c = np.array([])  # used by the sCRP prior -> running count of the clustering process
         self.d = None  # dimension of scenes
         self.event_models = dict()  # event model for each event type
         self.model = None # this is the tensorflow model that gets used
-
         self.x_prev = None  # last scene
         self.k_prev = None  # last event type
-
         self.x_history = np.zeros(())
-
-        # instead of dumping the results, store them to the object
         self.results = None
+        ## AB
+        self.seed = seed
+        self.obs_dim = 8 # state vector
+        self.sch_stsize = 25
+        self.lr = 0.1
+        self.schlib = [CSWNet(self.sch_stsize,self.seed)] # library of schemas
+        self.schema_active = self.schlib[0]
+
 
     def _calculate_unnormed_sCRP(self, prev_cluster=None):
         """ 
-
+        
         """
         # internal function for consistency across "run" methods
 
@@ -261,46 +266,53 @@ class SEM(BaseSEM):
     
     def update_single_event(self, x, update=True):
         """
-
-        :param x: this is an n x d array of the n scenes in an event
-        :param update: boolean (default True) update the prior and posterior of the event model
-        
-        :return:
-
-        NB this is called once for every story/event (i.e. number of trials = n_train+n_test)
+        x: num_events x obs_dim
+        `lik` :array num_events x len(schema_lib) with log_likelihoods. 
+        `prior` :1d-array with nonzero elements corresponding to active models
+            size grows at every event
+        `active` :list of len(schema_lib). contains ints to active models.
+            nb this is a range so self.n_schemas = active[-1]
+        `prior`, `log_prior`, `log_like` all grow with num of events
+            should grow with num of schemas
         """
-        print('update single event')
+        print('=update single event')
 
-
-        n_scene = np.shape(x)[0]
+        event = x 
+        event_len = np.shape(x)[0]
 
         (log_like,log_prior,post,x_hat,sigma,scene_log_like
             ) = self.update_prior_and_posterior_of_event_model(x)
 
-        # DELTA: calculate un-normed sCRP prior
+        """ 
+        todo: currently prior grows with number of obs
+        should only grow with number of schemas
+        """
         prior = self._calculate_unnormed_sCRP(self.k_prev)
-        print('prior ',prior)
+        print('-prior ',prior)
 
         # initialize likelihoods
+        """ active is a list (range) of integers of models with nonzero priors 
+        """
         active = np.nonzero(prior)[0]
+        self.n_schemas = len(active)
 
         ## ~~ SEM select winning model
         # calculate likelihood of obs under each active model
         lik,_x_hat,_sigma = self.calculate_likelihoods(x,active,prior)
         # calculate log like and prior, used for deciding on event_model
-        log_like[-1, :len(active)] = np.sum(lik, axis=0)
-        log_prior[-1, :len(active)] = np.log(prior[:len(active)])
+        log_like[-1, :self.n_schemas] = np.sum(lik, axis=0)
+        log_prior[-1, :self.n_schemas] = np.log(prior[:self.n_schemas])
         # at the end of the event, find the winning model!
-        k = active_model_idx = self.get_winning_model(post,log_prior,log_like,active)
+        k = active_model_idx = self.get_winning_model(post,log_prior,log_like)
         print('active_model_idx',active_model_idx)
         print('lik',lik.shape)
-        print('len active',len(active))
+        print('len active',self.n_schemas)
         ## ~\~ SEM calculate eventmodel likes and select winning model
 
         # cache for next event/story
         self.k_prev = k
         # update the prior
-        self.c[k] += n_scene
+        self.c[k] += event_len
         
         ## ~~ gradient update winning model weights
         # update with first observation
@@ -317,37 +329,39 @@ class SEM(BaseSEM):
         self.results.log_prior = log_prior
         self.results.e_hat = np.argmax(post, axis=1)
         self.results.log_loss = logsumexp(log_like + log_prior, axis=1)
-        scene_log_like[-n_scene:, :len(active)] = lik
+        scene_log_like[-event_len:, :self.n_schemas] = lik
         self.results.scene_log_like = scene_log_like
-        x_hat[-n_scene:, :] = _x_hat
-        sigma[-n_scene:, :] = _sigma
+        x_hat[-event_len:, :] = _x_hat
+        sigma[-event_len:, :] = _sigma
         self.results.x_hat = x_hat
         self.results.sigma = sigma
         return None
 
-    def get_winning_model(self,post,log_prior,log_like,active):
-        """ splitting SEM uses argmax
+    def get_winning_model(self,post,log_prior,log_like):
+        """ 
+        splitting SEM uses argmax of posterior log probability
         nonsplitting SEM takes single event
         """
-        log_post = log_prior[-1, :len(active)] + log_like[-1, :len(active)]
-        post[-1, :len(active)] = np.exp(log_post - logsumexp(log_post))
+        log_post = log_prior[-1, :self.n_schemas] + log_like[-1, :self.n_schemas]
+        post[-1, :self.n_schemas] = np.exp(log_post - logsumexp(log_post))
         k = np.argmax(log_post)
         self.results.post = post
         return k
 
     def calculate_likelihoods(self,x,active,prior):
         """ 
+        updates `lik` which contains log likelihood of active models
         """
-        n_scene = np.shape(x)[0]
+        event_len = np.shape(x)[0]
         # again, this is a readout of the model only and not used for updating,
         # but also keep track of the within event posterior
-        _x_hat = np.zeros((n_scene, self.d))  # temporary storre
-        _sigma = np.zeros((n_scene, self.d))
+        _x_hat = np.zeros((event_len, self.d))  # temporary storre
+        _sigma = np.zeros((event_len, self.d))
 
         ### initialize array 
         """ iteratively calculate likelihood of each obs
         """        
-        lik = np.zeros((n_scene, len(active)))
+        lik = np.zeros((event_len, self.n_schemas))
 
         for ii, x_curr in enumerate(x):
             # print('new obs')
@@ -379,7 +393,7 @@ class SEM(BaseSEM):
             else:
                 # otherwise, use previously observed scenes
                 k_within_event = np.argmax(
-                    np.sum(lik[:ii, :len(active)], axis=0) + np.log(prior[:len(active)]))
+                    np.sum(lik[:ii, :self.n_schemas], axis=0) + np.log(prior[:self.n_schemas]))
                 _x_hat[ii, :] = self.event_models[k_within_event].predict_next_generative(x[:ii, :])
                 
             _sigma[ii, :] = self.event_models[k_within_event].get_variance()
@@ -406,63 +420,7 @@ class SEM(BaseSEM):
 
 
 
-def no_split_sem_worker(queue, x, sem_init_kwargs=None, run_kwargs=None):
-    if sem_init_kwargs is None:
-        sem_init_kwargs=dict()
-    if run_kwargs is None:
-        run_kwargs=dict()
-    
-    sem_model = NoSplitSEM(**sem_init_kwargs)
-    sem_model.run_w_boundaries(x, **run_kwargs)
-    queue.put(sem_model.results)
 
-
-def no_split_sem_run_with_boundaries(x, sem_init_kwargs=None, run_kwargs=None):
-    """ this initailizes SEM, runs the main function 'run_w_boundaries', and
-    returns the results object within a seperate process.
-    
-    See help on SEM class and on subfunction 'run_w_boundaries' for more detail on the 
-    parameters contained in 'sem_init_kwargs'  and 'run_kwargs', respectively.
-
-    """
-    
-    q = Queue()
-    p = Process(target=no_split_sem_worker, args=[q, x], 
-                kwargs=dict(sem_init_kwargs=sem_init_kwargs, run_kwargs=run_kwargs))
-    p.start()
-    return q.get()
-
-
-def sem_worker(queue, x, sem_init_kwargs=None, run_kwargs=None):
-    if sem_init_kwargs is None:
-        sem_init_kwargs=dict()
-    if run_kwargs is None:
-        run_kwargs=dict()
-    
-    sem_model = SEM(**sem_init_kwargs)
-    sem_model.run_w_boundaries(x, **run_kwargs)
-    queue.put(sem_model.results)
-
-
-def sem_run_with_boundaries(x, sem_init_kwargs=None, run_kwargs=None):
-    """ this initailizes SEM, runs the main function 'run_w_boundaries', and
-    returns the results object within a seperate process.
-    
-    See help on SEM class and on subfunction 
-    'run_w_boundaries' for more detail on the 
-    parameters contained in 'sem_init_kwargs'  
-    and 'run_kwargs', respectively.
-
-    """
-    
-    q = Queue()
-    p = Process(target=sem_worker, args=[q, x], 
-                kwargs=dict(
-                    sem_init_kwargs=sem_init_kwargs, 
-                    run_kwargs=run_kwargs)
-                )
-    p.start()
-    return q.get()
-
-
-
+class Results(object):
+    """ placeholder object to store results """
+    pass

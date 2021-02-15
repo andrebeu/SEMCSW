@@ -14,9 +14,10 @@ print("TensorFlow Version: {}".format(tf.__version__))
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 
-class LinearEvent(object):
-    """ this is the base clase of the event model """
-
+class SharedObj(object):
+    """
+    NF helper methods
+    """
     def __init__(self, d, var_df0=None, var_scale0=None, 
         optimizer=None, n_epochs=10, init_model=False,
         kernel_initializer='glorot_uniform', l2_regularization=0.00, 
@@ -120,11 +121,67 @@ class LinearEvent(object):
         self.filler_vector = np.random.randn(self.d) / np.sqrt(self.d)
 
 
-class RecurrentLinearEvent(LinearEvent):
+    def fast_mvnorm_diagonal_logprob(self, x, variances):
+        """
+        Assumes a zero-mean mulitivariate normal with a diagonal covariance function
+        Parameters:
+            x: array, shape (D,)
+                observations
+            variances: array, shape (D,)
+                Diagonal values of the covariance function
+        output
+        ------
+            log-probability: float
+        """
+        log_2pi = np.log(2.0 * np.pi)
+        return -0.5 * (log_2pi * np.shape(x)[0] + np.sum(np.log(variances) + (x**2) / variances ))
 
-    # RNN which is initialized once and then trained using stochastic gradient descent
-    # i.e. each new scene is a single example batch of size 1
+    def map_variance(self, samples, nu0, var0):
+        """
+        This estimator assumes an scaled inverse-chi squared prior over the
+        variance and a Gaussian likelihood. The parameters d and scale
+        of the internal function parameterize the posterior of the variance.
+        Taken from Bayesian Data Analysis, ch2 (Gelman)
 
+        samples: N length array or NxD array, where N is the number of 
+                 samples and D is the dimensions
+        nu0: prior degrees of freedom
+        var0: prior scale parameter
+
+        returns: float or D-length array, mode of the posterior
+
+        ## Calculation ##
+
+        the posterior of the variance is thus (Gelman, 2nd edition, page 50):
+            
+            p(var | y) ~ Inv-X^2(nu0 + n, (nu0 * var0 + n * v) / (nu0 + n) )
+
+        where n is the sample size and v is the empirical variance.  The 
+        mode of this posterior simplifies to:
+
+            mode(var|y) = (nu0 * var0 + n * v) / (v0 + n + 2)
+
+        which is just a weighted average of the two modes
+
+        """
+
+        # get n and v from the data
+        n = np.shape(samples)[0]
+        v = np.var(samples, axis=0)
+
+        mode = (nu0 * var0 + n * v) / (nu0 + n + 2)
+        return mode
+
+    
+    def _update_variance(self):
+        if np.shape(self.prediction_errors)[0] > 1:
+            self.Sigma = self.map_variance(self.prediction_errors, self.var_df0, self.var_scale0)
+
+
+class TFobj(SharedObj):
+    """ 
+    anything tensorflow specific
+    """
     def __init__(self, d, var_df0=None, var_scale0=None, t=3,
         optimizer=None, n_epochs=10, l2_regularization=0.00, 
         batch_size=32,kernel_initializer='glorot_uniform', 
@@ -132,7 +189,7 @@ class RecurrentLinearEvent(LinearEvent):
         batch_update=True, optimizer_kwargs=None,variance_prior_mode=None, 
         variance_window=None):
 
-        LinearEvent.__init__(self, d, var_df0=var_df0, var_scale0=var_scale0,
+        SharedObj.__init__(self, d, var_df0=var_df0, var_scale0=var_scale0,
             optimizer=optimizer, n_epochs=n_epochs,init_model=False, 
             kernel_initializer=kernel_initializer,l2_regularization=l2_regularization, 
             prior_log_prob=prior_log_prob,reset_weights=reset_weights, 
@@ -159,35 +216,6 @@ class RecurrentLinearEvent(LinearEvent):
         # to implicitly learn a hidden state. We'll assume this
         # vector has length appox equal to 1
         self.filler_vector = np.random.randn(self.d) / np.sqrt(self.d)
-
-
-class CSWEvent(RecurrentLinearEvent):
-
-    def __init__(self, d, var_df0=None, var_scale0=None, t=3, 
-        n_hidden=None, optimizer=None,n_epochs=10, dropout=0.50, 
-        l2_regularization=0.00, batch_size=32,
-        kernel_initializer='glorot_uniform', init_model=False, 
-        prior_log_prob=None, reset_weights=False,batch_update=True, 
-        optimizer_kwargs=None, variance_prior_mode=None,
-        variance_window=None):
-
-        RecurrentLinearEvent.__init__(self, d, var_df0=var_df0, 
-            var_scale0=var_scale0, t=t,optimizer=optimizer, 
-            n_epochs=n_epochs,l2_regularization=l2_regularization, 
-            batch_size=batch_size,kernel_initializer=kernel_initializer, 
-            init_model=False,prior_log_prob=prior_log_prob, 
-            reset_weights=reset_weights,batch_update=batch_update, 
-            optimizer_kwargs=optimizer_kwargs,variance_prior_mode=variance_prior_mode, 
-            variance_window=variance_window)
-
-        if n_hidden is None:
-            self.n_hidden = d
-        else:
-            self.n_hidden = n_hidden
-        self.dropout = dropout
-
-        if init_model:
-            self.init_model()
 
     def init_model(self):
         self._compile_model()
@@ -218,7 +246,7 @@ class CSWEvent(RecurrentLinearEvent):
             self.model.set_weights(self.init_weights)
 
     def _unroll(self, x_example):
-        """
+        """ put data into format expected by model
         concatenate current example with 
         the history of the last t-1 examples
         this is for the recurrent layer
@@ -228,7 +256,69 @@ class CSWEvent(RecurrentLinearEvent):
         x_train = x_train.reshape((1, np.min([x_train.shape[0], self.t]), self.d))
         return x_train
 
-    # predict a single example
+    def get_variance(self):
+        # Sigma is stored as a vector corresponding to the entries of the diagonal covariance matrix
+        return self.Sigma
+
+    def do_reset_weights(self):
+        new_weights = [
+            self.model.layers[0].kernel_initializer(w.shape)
+                for w in self.model.get_weights()
+        ]
+        self.model.set_weights(new_weights)
+        self.model_weights = self.model.get_weights()
+
+    def set_model(self, model):
+        self.model = model
+        self.do_reset_weights()
+
+    def clear(self):
+        delete_object_attributes(self)
+
+
+
+class CSWEvent(TFobj):
+    """ 
+
+    """
+    def __init__(self, d, var_df0=None, var_scale0=None, t=3, 
+        n_hidden=None, optimizer=None,n_epochs=10, dropout=0.50, 
+        l2_regularization=0.00, batch_size=32,
+        kernel_initializer='glorot_uniform', init_model=False, 
+        prior_log_prob=None, reset_weights=False,batch_update=True, 
+        optimizer_kwargs=None, variance_prior_mode=None,
+        variance_window=None):
+
+        TFobj.__init__(self, d, var_df0=var_df0, 
+            var_scale0=var_scale0, t=t,optimizer=optimizer, 
+            n_epochs=n_epochs,l2_regularization=l2_regularization, 
+            batch_size=batch_size,kernel_initializer=kernel_initializer, 
+            init_model=False,prior_log_prob=prior_log_prob, 
+            reset_weights=reset_weights,batch_update=batch_update, 
+            optimizer_kwargs=optimizer_kwargs,variance_prior_mode=variance_prior_mode, 
+            variance_window=variance_window)
+
+        if n_hidden is None:
+            self.n_hidden = d
+        else:
+            self.n_hidden = n_hidden
+        self.dropout = dropout
+
+        if init_model:
+            self.init_model()
+
+    def _predict_f0(self):
+        return self.predict_next_generative(self.filler_vector)
+
+    def predict_f0(self):
+        """
+        wrapper for the prediction function that changes the prediction to the identity function
+        for untrained models (this is an initialization technique)
+
+        N.B. This answer is cached for speed
+
+        """
+        return self.f0
 
     def _predict_next(self, X):
         self.model.set_weights(self.model_weights)
@@ -246,48 +336,69 @@ class CSWEvent(RecurrentLinearEvent):
         x_test = self._unroll(x_test)
         return self.model.predict(x_test)
 
-    def _predict_f0(self):
-        return self.predict_next_generative(self.filler_vector)
+    def predict_next(self, X):
+        """
+        wrapper for the prediction function that changes the prediction to the identity function
+        for untrained models (this is an initialization technique)
 
-    def _update_variance(self):
-        if np.shape(self.prediction_errors)[0] > 1:
-            self.Sigma = map_variance(self.prediction_errors, self.var_df0, self.var_scale0)
+        """
+        if not self.f_is_trained:
+            if np.ndim(X) > 1:
+                return np.copy(X[-1, :]).reshape(1, -1)
+            return np.copy(X).reshape(1, -1)
 
-    def update(self, X, Xp, update_estimate=True):
-        if X.ndim > 1:
-            X = X[-1, :]  # only consider last example
-        assert X.ndim == 1
-        assert X.shape[0] == self.d
-        assert Xp.ndim == 1
-        assert Xp.shape[0] == self.d
-
-        x_example = X.reshape((1, self.d))
-        xp_example = Xp.reshape((1, self.d))
-
-        # concatenate the training example to the active event token
-        self.x_history[-1] = np.concatenate([self.x_history[-1], x_example], axis=0)
-
-        # also, create a list of training pairs (x, y) for efficient sampling
-        #  picks  random time-point in the history
-        _n = np.shape(self.x_history[-1])[0]
-        x_train_example = np.reshape(
-                    unroll_data(self.x_history[-1][max(_n - self.t, 0):, :], self.t)[-1, :, :], (1, self.t, self.d)
-                )
-        self.training_pairs.append(tuple([x_train_example, xp_example]))
-
-        if update_estimate:
-            self.estimate()
-            self.f_is_trained = True
+        return self._predict_next(X)
 
     def predict_next_generative(self, X):
-        """ set weights and data reshape"""
+        """ set weights and data reshape """
         self.model.set_weights(self.model_weights)
         X0 = np.reshape(unroll_data(X, self.t)[-1, :, :], (1, self.t, self.d))
         return self.model.predict(X0)
 
-    # optional: run batch gradient descent on all past event clusters
+    # likelihood 
     
+    def log_likelihood_f0(self, Xp):
+        if not self.f0_is_trained:
+            if self.prior_probability:
+                return self.prior_probability
+            else: 
+                return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
+
+        # predict the initial point (# this has been precomputed for speed)
+        Xp_hat = self.predict_f0()
+
+        # calculate probability
+        logprob = self.fast_mvnorm_diagonal_logprob(
+                        Xp.reshape(-1) - Xp_hat.reshape(-1), 
+                    self.Sigma)
+        return logprob
+
+    def log_likelihood_sequence(self, X, Xp):
+        """ 
+        Xp :current observation (target)
+        X  :observation history (input)
+        """
+        print('log_like_seq')
+        ## case: inactive schema
+        if not self.f_is_trained:
+            if self.prior_probability:
+                return self.prior_probability
+            else: 
+                return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
+        ## case: reused schema
+        Xp_hat = self.predict_next_generative(X)
+
+        # calculate probability
+        logprob = self.fast_mvnorm_diagonal_logprob(
+                        Xp.reshape(-1) - Xp_hat.reshape(-1), 
+                    self.Sigma)
+        return logprob
+
+    # WRAPPER
+
     def estimate(self):
+        """ optional: run batch gradient 
+        descent on all past event clusters """
         if self.reset_weights:
             self.do_reset_weights()
         else:
@@ -342,160 +453,57 @@ class CSWEvent(RecurrentLinearEvent):
             self.model.train_on_batch(x_batch, xp_batch)
         self.model_weights = self.model.get_weights()
 
-    def clear(self):
-        delete_object_attributes(self)
-
-    ## FROM LINEAR
-
-    def set_model(self, model):
-        self.model = model
-        self.do_reset_weights()
-
-    def do_reset_weights(self):
-        new_weights = [
-            self.model.layers[0].kernel_initializer(w.shape)
-                for w in self.model.get_weights()
-        ]
-        self.model.set_weights(new_weights)
-        self.model_weights = self.model.get_weights()
+    # called in CSWSEM
 
     def update_f0(self, Xp, update_estimate=True):
+        """ 
+        called in CSWNET
+        """
         self.update(self.filler_vector, Xp, update_estimate=update_estimate)
         self.f0_is_trained = True
 
         # precompute f0 for speed
         self.f0 = self._predict_f0()
 
-    def get_variance(self):
-        # Sigma is stored as a vector corresponding to the entries of the diagonal covariance matrix
-        return self.Sigma
-
-    def predict_next(self, X):
-        """
-        wrapper for the prediction function that changes the prediction to the identity function
-        for untrained models (this is an initialization technique)
-
-        """
-        if not self.f_is_trained:
-            if np.ndim(X) > 1:
-                return np.copy(X[-1, :]).reshape(1, -1)
-            return np.copy(X).reshape(1, -1)
-
-        return self._predict_next(X)
-
-    def predict_f0(self):
-        """
-        wrapper for the prediction function that changes the prediction to the identity function
-        for untrained models (this is an initialization technique)
-
-        N.B. This answer is cached for speed
-
-        """
-        return self.f0
-
-    def log_likelihood_f0(self, Xp):
-        if not self.f0_is_trained:
-            if self.prior_probability:
-                return self.prior_probability
-            else: 
-                return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
-
-        # predict the initial point (# this has been precomputed for speed)
-        Xp_hat = self.predict_f0()
-
-        # return the probability
-        return fast_mvnorm_diagonal_logprob(Xp.reshape(-1) - Xp_hat.reshape(-1), self.Sigma)
-
-    def log_likelihood_sequence(self, X, Xp):
+    def update(self, X, Xp, update_estimate=True):
         """ 
-        Xp :current observation (target)
-        X  :observation history (input)
+        called in CSWNET
         """
-        print('log_like_seq')
-        ## case: inactive schema
-        if not self.f_is_trained:
-            # case inactive schema 
-            if self.prior_probability:
-                return self.prior_probability
-            else: 
-                return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
+        if X.ndim > 1:
+            X = X[-1, :]  # only consider last example
+        assert X.ndim == 1
+        assert X.shape[0] == self.d
+        assert Xp.ndim == 1
+        assert Xp.shape[0] == self.d
 
-        # reuse?
-        ## case: reused schema
-        Xp_hat = self.predict_next_generative(X)
-        return fast_mvnorm_diagonal_logprob(Xp.reshape(-1) - Xp_hat.reshape(-1), self.Sigma)
+        x_example = X.reshape((1, self.d))
+        xp_example = Xp.reshape((1, self.d))
 
-    def new_token(self):
-        """ create a new cluster of scenes """
-        if len(self.x_history) == 1 and self.x_history[0].shape[0] == 0:
-            # special case for the first cluster which is already created
-            return
-        self.x_history.append(np.zeros((0, self.d)))
+        # concatenate the training example to the active event token
+        self.x_history[-1] = np.concatenate([self.x_history[-1], x_example], axis=0)
 
-    def run_generative(self, n_steps, initial_point=None):
-        self.model.set_weights(self.model_weights)
-        if initial_point is None:
-            x_gen = self._predict_f0()
-        else:
-            x_gen = np.reshape(initial_point, (1, self.d))
-        for ii in range(1, n_steps):
-            x_gen = np.concatenate([x_gen, self.predict_next_generative(x_gen[:ii, :])])
-        return x_gen
+        # also, create a list of training pairs (x, y) for efficient sampling
+        #  picks  random time-point in the history
+        _n = np.shape(self.x_history[-1])[0]
+        x_train_example = np.reshape(
+                    unroll_data(self.x_history[-1][max(_n - self.t, 0):, :], self.t)[-1, :, :], (1, self.t, self.d)
+                )
+        self.training_pairs.append(tuple([x_train_example, xp_example]))
+
+        if update_estimate:
+            self.estimate()
+            self.f_is_trained = True
 
 
-
-def map_variance(samples, nu0, var0):
-    """
-    This estimator assumes an scaled inverse-chi squared prior over the
-    variance and a Gaussian likelihood. The parameters d and scale
-    of the internal function parameterize the posterior of the variance.
-    Taken from Bayesian Data Analysis, ch2 (Gelman)
-
-    samples: N length array or NxD array, where N is the number of 
-             samples and D is the dimensions
-    nu0: prior degrees of freedom
-    var0: prior scale parameter
-
-    returns: float or D-length array, mode of the posterior
-
-    ## Calculation ##
-
-    the posterior of the variance is thus (Gelman, 2nd edition, page 50):
-        
-        p(var | y) ~ Inv-X^2(nu0 + n, (nu0 * var0 + n * v) / (nu0 + n) )
-
-    where n is the sample size and v is the empirical variance.  The 
-    mode of this posterior simplifies to:
-
-        mode(var|y) = (nu0 * var0 + n * v) / (v0 + n + 2)
-
-    which is just a weighted average of the two modes
-
-    """
-
-    # get n and v from the data
-    n = np.shape(samples)[0]
-    v = np.var(samples, axis=0)
-
-    mode = (nu0 * var0 + n * v) / (nu0 + n + 2)
-    return mode
-
-
-def fast_mvnorm_diagonal_logprob(x, variances):
-    """
-    Assumes a zero-mean mulitivariate normal with a diagonal covariance function
-    Parameters:
-        x: array, shape (D,)
-            observations
-        variances: array, shape (D,)
-            Diagonal values of the covariance function
-    output
-    ------
-        log-probability: float
-    """
-    log_2pi = np.log(2.0 * np.pi)
-    return -0.5 * (log_2pi * np.shape(x)[0] + np.sum(np.log(variances) + (x**2) / variances ))
-
+    # def run_generative(self, n_steps, initial_point=None):
+    #     self.model.set_weights(self.model_weights)
+    #     if initial_point is None:
+    #         x_gen = self._predict_f0()
+    #     else:
+    #         x_gen = np.reshape(initial_point, (1, self.d))
+    #     for ii in range(1, n_steps):
+    #         x_gen = np.concatenate([x_gen, self.predict_next_generative(x_gen[:ii, :])])
+    #     return x_gen
 
 
 

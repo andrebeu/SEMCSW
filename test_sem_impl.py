@@ -1,11 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# This script runs one param_set. Outputs results{}.csv and trialxtrial{}.csv
-
-# In[1]:
-
-
 import sys
 import numpy as np
 import matplotlib.pyplot as plt

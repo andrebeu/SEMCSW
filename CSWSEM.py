@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import tensorflow as tf
 from scipy.special import logsumexp
@@ -5,10 +6,6 @@ from tqdm import tqdm
 # from local_event_models import GRUEvent
 from sem.utils import delete_object_attributes
 
-# https://github.com/nicktfranklin/SEM2
-
-# there are a ~ton~ of tf warnings from Keras, suppress them here
-import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 # NTF tensorflow implementation
@@ -303,6 +300,10 @@ class SEM(BaseSEM):
             nb this is a range so self.n_schemas = active[-1]
         `prior`, `log_prior`, `log_like` all grow with num of events
             should grow with num of schemas
+
+        NF keeps track of distributions over time
+            every epoch a new row is added
+            when a new model is forked, a new column is added
         """
         print('\n=update single event')
 
@@ -315,27 +316,21 @@ class SEM(BaseSEM):
         ## PRIOR CALCULATION
         prior = self._calculate_unnormed_sCRP(self.k_prev)
         prior_AB = self.get_crp_prior()
-        print('NF-prior',prior)
-        print('AB-prior',prior_AB,'\n')
-        assert np.alltrue(prior_AB == prior[:len(prior_AB)])
 
         ## active
         active = np.nonzero(prior)[0]
         self.n_schemas = len(active)
         assert active[-1]==len(active)-1
-        # print('AB-schcount',self.schema_count)
-        # print('AB-numactive',len(self.schlib))
         
         ## log prior
         log_prior[-1, :self.n_schemas] = np.log(prior[:self.n_schemas])
         log_prior_AB = np.log(prior_AB)
-        print('NF-logprior\n',log_prior)
+        print('NF-logprior\n',log_prior[-1, :self.n_schemas])
         print('AB-logprior\n',log_prior_AB,'\n')
+        assert np.alltrue(log_prior_AB==log_prior[-1, :self.n_schemas])
 
-        ## ~~ SEM select winning model
-
-        ### LIKELIHOOD CALCULATION
-        # NB likelihood is calculated for each step (tsteps x nschemas)
+        ## LIKELIHOOD CALCULATION
+        # likelihood is calculated for each step (tsteps x nschemas)
         lik,_x_hat,_sigma = self.calculate_likelihoods(x,active,prior)
         log_like_AB = self.calc_likelihood(event) # (tsteps,schemas)
         print('NF-like',lik)
@@ -343,25 +338,26 @@ class SEM(BaseSEM):
         if self.prev_schema_idx!=None:
             assert (np.alltrue(log_like_AB==lik))
         
-        # # lik is 
-        ## NF appends loglike to the end?
+        ## collapse log_like over obs 
         log_like[-1, :self.n_schemas] = np.sum(lik, axis=0) 
         log_like_AB = np.sum(log_like_AB,axis=0)
-        print('NF-loglike',log_like)
-        print('AB-loglike',log_like_AB,'\n')
+        print('NF-sum_loglike',log_like[-1, :self.n_schemas])
+        print('AB-sum_loglike',log_like_AB,'\n')
+        if self.prev_schema_idx !=None:
+            assert np.alltrue(log_like_AB == log_like[-1, :self.n_schemas])
 
         ## select model 
         k = self.active_schema_idx = self.get_winning_model(post,log_prior,log_like)
         self.active_schema_idx = self.get_active_schema_idx(log_prior_AB,log_like_AB)
         print('NF-schemaidx',k)
         print('AB-schemaidx',self.active_schema_idx,'\n')
+        assert (self.active_schema_idx == k)
         ## ~\~ SEM calculate eventmodel likes and select winning model
 
         # cache for next event/story
         self.k_prev = k
         self.c[k] += event_len
         self.prev_schema_idx = self.active_schema_idx
-        
         
         ## 
         if self.active_schema_idx == len(self.schema_count)-1:

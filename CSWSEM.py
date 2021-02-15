@@ -316,12 +316,7 @@ class SEM(BaseSEM):
         prior = self._calculate_unnormed_sCRP(self.k_prev)
         prior_AB = self.get_crp_prior()
         print('NF-prior',prior)
-        print('AB-prior',prior_AB)
-        # assert False
-        
-        # print('NF-prior ',prior.astype(int))
-        # print('AB-prior',prior_AB)
-        # print('AB-schcount',self.schema_count)
+        print('AB-prior',prior_AB,'\n')
         assert np.alltrue(prior_AB == prior[:len(prior_AB)])
 
         ## active
@@ -331,40 +326,42 @@ class SEM(BaseSEM):
         # print('AB-schcount',self.schema_count)
         # print('AB-numactive',len(self.schlib))
         
-        ## ~~ SEM select winning model
-
-        ### LIKELIHOOD CALCULATION
-        # calculate log like and prior, used for deciding on event_model
-        # calculate likelihood of obs under each active model
-        lik,_x_hat,_sigma = self.calculate_likelihoods(x,active,prior)
-        log_like_AB = self.calc_likelihood(event) # (tsteps,schemas)
-        print('NF-like',lik)
-        print('AB-like',log_like_AB)
-        if self.prev_schema_idx!=None:
-            assert (np.alltrue(log_like_AB==lik))
-        
-        # # lik is (tsteps x nschemas)
-        log_like_AB = np.sum(log_like_AB,axis=0)
-        log_like[-1, :self.n_schemas] = np.sum(lik, axis=0)
-
-        ## select model 
-        
+        ## log prior
         log_prior[-1, :self.n_schemas] = np.log(prior[:self.n_schemas])
         log_prior_AB = np.log(prior_AB)
         print('NF-logprior\n',log_prior)
-        print('AB-logprior\n',log_prior_AB)
-        # at the end of the event, find the winning model!
+        print('AB-logprior\n',log_prior_AB,'\n')
+
+        ## ~~ SEM select winning model
+
+        ### LIKELIHOOD CALCULATION
+        # NB likelihood is calculated for each step (tsteps x nschemas)
+        lik,_x_hat,_sigma = self.calculate_likelihoods(x,active,prior)
+        log_like_AB = self.calc_likelihood(event) # (tsteps,schemas)
+        print('NF-like',lik)
+        print('AB-like',log_like_AB,'\n')
+        if self.prev_schema_idx!=None:
+            assert (np.alltrue(log_like_AB==lik))
+        
+        # # lik is 
+        ## NF appends loglike to the end?
+        log_like[-1, :self.n_schemas] = np.sum(lik, axis=0) 
+        log_like_AB = np.sum(log_like_AB,axis=0)
+        print('NF-loglike',log_like)
+        print('AB-loglike',log_like_AB,'\n')
+
+        ## select model 
         k = self.active_schema_idx = self.get_winning_model(post,log_prior,log_like)
-        print('NF-schemaidx',k)
         self.active_schema_idx = self.get_active_schema_idx(log_prior_AB,log_like_AB)
-        print('AB-schemaidx',self.active_schema_idx)
+        print('NF-schemaidx',k)
+        print('AB-schemaidx',self.active_schema_idx,'\n')
         ## ~\~ SEM calculate eventmodel likes and select winning model
 
         # cache for next event/story
         self.k_prev = k
-        self.prev_schema_idx = self.active_schema_idx
-        # update the prior
         self.c[k] += event_len
+        self.prev_schema_idx = self.active_schema_idx
+        
         
         ## 
         if self.active_schema_idx == len(self.schema_count)-1:

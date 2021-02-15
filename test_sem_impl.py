@@ -29,7 +29,7 @@ from cswRNN import CSWEvent
 model_type        = str('SEM')
 lr                = float(0.05)
 n_epochs          = int(1)   
-seed = int(99)
+seed = int(96)
 condition = 'single'
 n_train = 5
 n_test = 1

@@ -14,6 +14,10 @@ from cswRNN import CSWEvent
 from CSW import CSWNet
 import torch as tr
 
+
+DEBUG = True
+
+
 """ 
 
 defn: schema is an rnn
@@ -127,9 +131,13 @@ class BaseSEM(object):
         # loop over events
 
         self.init_for_boundaries(list_events)
-
-        for x in list_events:
-            self.update_single_event(x)
+        if DEBUG:
+            event_idx_L = [0,0,0,1,1,2,2,1,1,0]
+            for idx,event in enumerate(list_events):
+                self.update_single_event(event,event_idx=event_idx_L[idx])
+        else:
+            for event in list_events:
+                self.update_single_event(event)
         return None
 
     def update_prior_and_posterior_of_event_model(self,x):
@@ -290,7 +298,7 @@ class SEM(BaseSEM):
         # prior /= np.sum(prior)
         return prior
 
-    def update_single_event(self, x, update=True):
+    def update_single_event(self, x, event_idx=None, update=True):
         """
         x: num_events x obs_dim
         `lik` :array num_events x len(schema_lib) with log_likelihoods. 
@@ -305,7 +313,7 @@ class SEM(BaseSEM):
             every epoch a new row is added
             when a new model is forked, a new column is added
         """
-        print('\n=update single event')
+        print('\n==process new event')
 
         event = x 
         event_len = np.shape(event)[0]
@@ -317,7 +325,7 @@ class SEM(BaseSEM):
         prior = self._calculate_unnormed_sCRP(self.k_prev)
         prior_AB = self.get_crp_prior()
 
-        ## active
+        # active
         active = np.nonzero(prior)[0]
         self.n_schemas = len(active)
         assert active[-1]==len(active)-1
@@ -325,56 +333,64 @@ class SEM(BaseSEM):
         ## log prior
         log_prior[-1, :self.n_schemas] = np.log(prior[:self.n_schemas])
         log_prior_AB = np.log(prior_AB)
-        print('NF-logprior\n',log_prior[-1, :self.n_schemas])
-        print('AB-logprior\n',log_prior_AB,'\n')
+        # print('NF-logprior\n',log_prior[-1, :self.n_schemas])
+        # print('AB-logprior\n',log_prior_AB,'\n')
         assert np.alltrue(log_prior_AB==log_prior[-1, :self.n_schemas])
 
         ## LIKELIHOOD CALCULATION
         # likelihood is calculated for each step (tsteps x nschemas)
         lik,_x_hat,_sigma = self.calculate_likelihoods(x,active,prior)
         log_like_AB = self.calc_likelihood(event) # (tsteps,schemas)
-        print('NF-like',lik)
-        print('AB-like',log_like_AB,'\n')
+        # print('NF-like',lik)
+        # print('AB-like',log_like_AB,'\n')
         if self.prev_schema_idx!=None:
             assert (np.alltrue(log_like_AB==lik))
         
         ## collapse log_like over obs 
         log_like[-1, :self.n_schemas] = np.sum(lik, axis=0) 
         log_like_AB = np.sum(log_like_AB,axis=0)
-        print('NF-sum_loglike',log_like[-1, :self.n_schemas])
-        print('AB-sum_loglike',log_like_AB,'\n')
+        # print('NF-sum_loglike',log_like[-1, :self.n_schemas])
+        # print('AB-sum_loglike',log_like_AB,'\n')
         if self.prev_schema_idx !=None:
             assert np.alltrue(log_like_AB == log_like[-1, :self.n_schemas])
 
-        ## select model 
+        ## USE PRIOR AND LIKELIHOOD TO SELECT MODEL
         k = self.active_schema_idx = self.get_winning_model(post,log_prior,log_like)
         self.active_schema_idx = self.get_active_schema_idx(log_prior_AB,log_like_AB)
-        print('NF-schemaidx',k)
-        print('AB-schemaidx',self.active_schema_idx,'\n')
+        # print('NF-schemaidx',k)
+        # print('AB-schemaidx',self.active_schema_idx,'\n')
         assert (self.active_schema_idx == k)
         ## ~\~ SEM calculate eventmodel likes and select winning model
 
-        # cache for next event/story
+        ## specify model debug 
+        if DEBUG:
+            self.active_schema_idx = k = event_idx
+
+        ## cache for next event/story
         self.k_prev = k
         self.c[k] += event_len
         self.prev_schema_idx = self.active_schema_idx
-        
-        ## 
+
+        ## if new active_schema, update schlib
         if self.active_schema_idx == len(self.schema_count)-1:
-            print('new active schema')
+            # print('new active schema')
             self.schema_count = np.concatenate([self.schema_count,[0]])
             self.schlib.append(CSWNet(self.sch_stsize,self.seed))
         self.schema_count[self.active_schema_idx] += event_len
 
-        ## ~~ gradient update winning model weights
+
+        ### GRADIENT STEP: UPDATE WINNING MODEL WEIGHTS
         # update with first observation
-        self.event_models[k].update_f0(x[0])
+        print('-')
+        self.event_models[k].update_f0(event[0])
+        obs_prev = event[0]
         # update with subsequent observations
-        x_prev = x[0]
-        for X0 in x[1:]:
-            self.event_models[k].update(x_prev, X0)
-            x_prev = X0
+        for obs in event[1:]:
+            self.event_models[k].update(obs_prev, obs)
+            obs_prev = obs
         ## ~/~ gradient update winning model weights
+
+
 
         # collect RESULTS 
         self.results.log_like = log_like

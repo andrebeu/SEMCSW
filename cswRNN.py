@@ -14,59 +14,6 @@ print("TensorFlow Version: {}".format(tf.__version__))
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 
-def map_variance(samples, nu0, var0):
-    """
-    This estimator assumes an scaled inverse-chi squared prior over the
-    variance and a Gaussian likelihood. The parameters d and scale
-    of the internal function parameterize the posterior of the variance.
-    Taken from Bayesian Data Analysis, ch2 (Gelman)
-
-    samples: N length array or NxD array, where N is the number of 
-             samples and D is the dimensions
-    nu0: prior degrees of freedom
-    var0: prior scale parameter
-
-    returns: float or D-length array, mode of the posterior
-
-    ## Calculation ##
-
-    the posterior of the variance is thus (Gelman, 2nd edition, page 50):
-        
-        p(var | y) ~ Inv-X^2(nu0 + n, (nu0 * var0 + n * v) / (nu0 + n) )
-
-    where n is the sample size and v is the empirical variance.  The 
-    mode of this posterior simplifies to:
-
-        mode(var|y) = (nu0 * var0 + n * v) / (v0 + n + 2)
-
-    which is just a weighted average of the two modes
-
-    """
-
-    # get n and v from the data
-    n = np.shape(samples)[0]
-    v = np.var(samples, axis=0)
-
-    mode = (nu0 * var0 + n * v) / (nu0 + n + 2)
-    return mode
-
-
-def fast_mvnorm_diagonal_logprob(x, variances):
-    """
-    Assumes a zero-mean mulitivariate normal with a diagonal covariance function
-    Parameters:
-        x: array, shape (D,)
-            observations
-        variances: array, shape (D,)
-            Diagonal values of the covariance function
-    output
-    ------
-        log-probability: float
-    """
-    log_2pi = np.log(2.0 * np.pi)
-    return -0.5 * (log_2pi * np.shape(x)[0] + np.sum(np.log(variances) + (x**2) / variances ))
-
-
 class LinearEvent(object):
     """ this is the base clase of the event model """
 
@@ -282,6 +229,7 @@ class CSWEvent(RecurrentLinearEvent):
         return x_train
 
     # predict a single example
+
     def _predict_next(self, X):
         self.model.set_weights(self.model_weights)
         # Note: this function predicts the next conditioned on the training data the model has seen
@@ -337,6 +285,7 @@ class CSWEvent(RecurrentLinearEvent):
         return self.model.predict(X0)
 
     # optional: run batch gradient descent on all past event clusters
+    
     def estimate(self):
         if self.reset_weights:
             self.do_reset_weights()
@@ -467,7 +416,6 @@ class CSWEvent(RecurrentLinearEvent):
         Xp_hat = self.predict_next_generative(X)
         return fast_mvnorm_diagonal_logprob(Xp.reshape(-1) - Xp_hat.reshape(-1), self.Sigma)
 
-    
     def new_token(self):
         """ create a new cluster of scenes """
         if len(self.x_history) == 1 and self.x_history[0].shape[0] == 0:
@@ -484,6 +432,62 @@ class CSWEvent(RecurrentLinearEvent):
         for ii in range(1, n_steps):
             x_gen = np.concatenate([x_gen, self.predict_next_generative(x_gen[:ii, :])])
         return x_gen
+
+
+
+def map_variance(samples, nu0, var0):
+    """
+    This estimator assumes an scaled inverse-chi squared prior over the
+    variance and a Gaussian likelihood. The parameters d and scale
+    of the internal function parameterize the posterior of the variance.
+    Taken from Bayesian Data Analysis, ch2 (Gelman)
+
+    samples: N length array or NxD array, where N is the number of 
+             samples and D is the dimensions
+    nu0: prior degrees of freedom
+    var0: prior scale parameter
+
+    returns: float or D-length array, mode of the posterior
+
+    ## Calculation ##
+
+    the posterior of the variance is thus (Gelman, 2nd edition, page 50):
+        
+        p(var | y) ~ Inv-X^2(nu0 + n, (nu0 * var0 + n * v) / (nu0 + n) )
+
+    where n is the sample size and v is the empirical variance.  The 
+    mode of this posterior simplifies to:
+
+        mode(var|y) = (nu0 * var0 + n * v) / (v0 + n + 2)
+
+    which is just a weighted average of the two modes
+
+    """
+
+    # get n and v from the data
+    n = np.shape(samples)[0]
+    v = np.var(samples, axis=0)
+
+    mode = (nu0 * var0 + n * v) / (nu0 + n + 2)
+    return mode
+
+
+def fast_mvnorm_diagonal_logprob(x, variances):
+    """
+    Assumes a zero-mean mulitivariate normal with a diagonal covariance function
+    Parameters:
+        x: array, shape (D,)
+            observations
+        variances: array, shape (D,)
+            Diagonal values of the covariance function
+    output
+    ------
+        log-probability: float
+    """
+    log_2pi = np.log(2.0 * np.pi)
+    return -0.5 * (log_2pi * np.shape(x)[0] + np.sum(np.log(variances) + (x**2) / variances ))
+
+
 
 
 import torch as tr

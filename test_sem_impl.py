@@ -29,10 +29,10 @@ from cswRNN import CSWEvent
 model_type        = str('SEM')
 lr                = float(0.05)
 n_epochs          = int(1)   
-seed = int(96)
+seed = int(99)
 condition = 'single'
-n_train = 5
-n_test = 1
+n_train = 8
+n_test = 2
 
 optimizer_kwargs = dict(
     lr=lr, 
@@ -51,23 +51,25 @@ f_opts=dict(
   optimizer_kwargs=optimizer_kwargs
 )
 
+# alpha ~ pr new cluster
+# lmbda ~ pr reuse
 def get_params(case):
     if case==0:
-        log_alpha         = int(-30)  # sCRP alpha is set in log scale
-        log_lambda        = int(-25)  # sCRP lambda is set in log scale
+        log_alpha         = int(24)  # sCRP alpha is set in log scale
+        log_lambda        = int(15)  # sCRP lambda is set in log scale
     if case==1:
-        log_alpha         = int(-30)  # sCRP alpha is set in log scale
-        log_lambda        = int(25)  # sCRP lambda is set in log scale
+        log_alpha         = int(10)  # sCRP alpha is set in log scale
+        log_lambda        = int(5)  # sCRP lambda is set in log scale
     if case==2:
-        log_alpha         = int(30)  # sCRP alpha is set in log scale
-        log_lambda        = int(-25)  # sCRP lambda is set in log scale
+        log_alpha         = int(17)  # sCRP alpha is set in log scale
+        log_lambda        = int(-10)  # sCRP lambda is set in log scale
     if case==3:
-        log_alpha         = int(30)  # sCRP alpha is set in log scale
-        log_lambda        = int(25)  # sCRP lambda is set in log scale
+        log_alpha         = int(16)  # sCRP alpha is set in log scale
+        log_lambda        = int(-8)  # sCRP lambda is set in log scale
     return log_alpha,log_lambda
 
 
-for case in range(4):
+for case in range(1):
     print('\n\n**CASE%i\n'%case)
     log_alpha,log_lambda = get_params(case)
 

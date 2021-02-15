@@ -133,6 +133,7 @@ class BaseSEM(object):
         self.init_for_boundaries(list_events)
         if DEBUG:
             event_idx_L = [0,0,0,1,1,2,2,1,1,0]
+            event_idx_L = [0,0,0,1,1,1,1,1,1,0]
             for idx,event in enumerate(list_events):
                 self.update_single_event(event,event_idx=event_idx_L[idx])
         else:
@@ -266,10 +267,6 @@ class SEM(BaseSEM):
             each schema was used 
         - len(prior) == len(schlib)
         """
-        print(
-            'num schemas',len(self.schlib),
-            'self.prev_schema_idx',self.prev_schema_idx
-            )
         ## case not previous not new
         prior = self.schema_count.copy().astype(float)
         ## case previous event
@@ -313,7 +310,7 @@ class SEM(BaseSEM):
             every epoch a new row is added
             when a new model is forked, a new column is added
         """
-        print('\n==process new event')
+        print('\n**process new event')
 
         event = x 
         event_len = np.shape(event)[0]
@@ -366,6 +363,11 @@ class SEM(BaseSEM):
         if DEBUG:
             self.active_schema_idx = k = event_idx
 
+        print(
+            'num schemas',len(self.schlib),
+            'schema_idx',self.active_schema_idx
+            )
+
         ## cache for next event/story
         self.k_prev = k
         self.c[k] += event_len
@@ -388,9 +390,8 @@ class SEM(BaseSEM):
         for obs in event[1:]:
             self.event_models[k].update(obs_prev, obs)
             obs_prev = obs
+        print('--')
         ## ~/~ gradient update winning model weights
-
-
 
         # collect RESULTS 
         self.results.log_like = log_like
@@ -435,6 +436,8 @@ class SEM(BaseSEM):
         updates `lik` which contains log likelihood of *all schemas*
         NB NTF calculate lik of all active schemas and an extra schema 
         """
+        print('\n\n == NF like')
+
         event = x
         event_len = np.shape(event)[0]
         """ NTF
@@ -512,19 +515,24 @@ class SEM(BaseSEM):
         """ calculate likelihood for all schemas 
             - active schemas + one inactive schema
         """
+        print('\n\n == AB like')
         event_len = event.shape[0]
         num_schemas = len(self.schlib)
         log_like = np.zeros((event_len, num_schemas))
-        for tstep, obs in enumerate(event):
+        for tstep in range(len(event)):
+            print('\ntstep',tstep)
+            obs_hist = event[:tstep, :].reshape(-1, self.d)
+            obs_t = event[tstep,:]
             for sch_idx in np.arange(num_schemas):
+                print('sch',sch_idx)
                 model = self.event_models[sch_idx]
                 if not tstep==0:
                     log_like[tstep, sch_idx] = model.log_likelihood_sequence(
-                        event[:tstep, :].reshape(-1, self.d), obs
+                        obs_hist, obs_t
                         )
                 else:
-                    log_like[tstep, sch_idx] = model.log_likelihood_f0(obs)
-                ## AB handles first obs differently from NTF
+                    log_like[tstep, sch_idx] = model.log_likelihood_f0(obs_t)
+                ## AB handles first obs differently from NF
                 if self.prev_schema_idx == None:
                     break
 

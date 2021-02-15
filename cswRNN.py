@@ -280,6 +280,7 @@ class CSWEvent(RecurrentLinearEvent):
             self.f_is_trained = True
 
     def predict_next_generative(self, X):
+        """ set weights and data reshape"""
         self.model.set_weights(self.model_weights)
         X0 = np.reshape(unroll_data(X, self.t)[-1, :, :], (1, self.t, self.d))
         return self.model.predict(X0)
@@ -393,7 +394,6 @@ class CSWEvent(RecurrentLinearEvent):
         return self.f0
 
     def log_likelihood_f0(self, Xp):
-
         if not self.f0_is_trained:
             if self.prior_probability:
                 return self.prior_probability
@@ -407,12 +407,21 @@ class CSWEvent(RecurrentLinearEvent):
         return fast_mvnorm_diagonal_logprob(Xp.reshape(-1) - Xp_hat.reshape(-1), self.Sigma)
 
     def log_likelihood_sequence(self, X, Xp):
+        """ 
+        Xp :current observation (target)
+        X  :observation history (input)
+        """
+        print('log_like_seq')
+        ## case: inactive schema
         if not self.f_is_trained:
+            # case inactive schema 
             if self.prior_probability:
                 return self.prior_probability
             else: 
                 return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
 
+        # reuse?
+        ## case: reused schema
         Xp_hat = self.predict_next_generative(X)
         return fast_mvnorm_diagonal_logprob(Xp.reshape(-1) - Xp_hat.reshape(-1), self.Sigma)
 

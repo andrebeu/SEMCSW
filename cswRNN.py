@@ -356,7 +356,7 @@ class CSWEvent(TFobj):
         return self.model.predict(X0)
 
     # likelihood 
-    
+
     def log_likelihood_f0(self, Xp):
         if not self.f0_is_trained:
             if self.prior_probability:
@@ -493,18 +493,6 @@ class CSWEvent(TFobj):
         if update_estimate:
             self.estimate()
             self.f_is_trained = True
-
-
-    # def run_generative(self, n_steps, initial_point=None):
-    #     self.model.set_weights(self.model_weights)
-    #     if initial_point is None:
-    #         x_gen = self._predict_f0()
-    #     else:
-    #         x_gen = np.reshape(initial_point, (1, self.d))
-    #     for ii in range(1, n_steps):
-    #         x_gen = np.concatenate([x_gen, self.predict_next_generative(x_gen[:ii, :])])
-    #     return x_gen
-
 
 
 import torch as tr

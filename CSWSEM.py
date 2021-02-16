@@ -381,16 +381,21 @@ class SEM(BaseSEM):
         self.schema_count[self.active_schema_idx] += event_len
 
 
-        ### GRADIENT STEP: UPDATE WINNING MODEL WEIGHTS
+        ### NF GRADIENT STEP: UPDATE WINNING MODEL WEIGHTS
         # update with first observation
-        print('-')
-        self.event_models[k].update_f0(event[0])
-        obs_prev = event[0]
-        # update with subsequent observations
-        for obs in event[1:]:
-            self.event_models[k].update(obs_prev, obs)
-            obs_prev = obs
-        print('--')
+        
+        def update_model(model,event):
+            print('-')
+            model.update_f0(event[0])
+            obs_prev = event[0]
+            # update with subsequent observations
+            for obs in event[1:]:
+                model.update(obs_prev, obs)
+                obs_prev = obs
+            return None
+
+        NF_active_model = self.event_models[k]
+        update_model(NF_active_model,event)
         ## ~/~ gradient update winning model weights
 
         # collect RESULTS 
@@ -517,25 +522,27 @@ class SEM(BaseSEM):
         """
         print('\n\n == AB like')
         event_len = event.shape[0]
-        num_schemas = len(self.schlib)
+        num_schemas = len(self.event_models)
         log_like = np.zeros((event_len, num_schemas))
-        for tstep in range(len(event)):
-            print('\ntstep',tstep)
-            obs_hist = event[:tstep, :].reshape(-1, self.d)
-            obs_t = event[tstep,:]
-            for sch_idx in np.arange(num_schemas):
-                print('sch',sch_idx)
-                model = self.event_models[sch_idx]
-                if not tstep==0:
-                    log_like[tstep, sch_idx] = model.log_likelihood_sequence(
-                        obs_hist, obs_t
-                        )
-                else:
-                    log_like[tstep, sch_idx] = model.log_likelihood_f0(obs_t)
-                ## AB handles first obs differently from NF
-                if self.prev_schema_idx == None:
-                    break
+        for sch_idx in np.arange(num_schemas):
+            model = self.event_models[sch_idx]
+            log_like[:,sch_idx] = model.log_likelihood(event)
+        return log_like
 
+        # ## NF
+        # num_schemas_NF = len(self.event_models)
+        # 
+        # for sch_idx in np.arange(num_schemas_NF):
+        #     model = self.event_models[sch_idx]
+        #     for tstep in range(len(event)):
+        #         obs_hist = event[:tstep, :].reshape(-1, self.d)
+        #         obs_t = event[tstep,:]   
+        #         if not tstep==0:
+        #             log_like_NF[tstep, sch_idx] = model.log_likelihood_sequence(
+        #                 obs_hist, obs_t
+        #                 )
+        #         else:
+        #             log_like_NF[tstep, sch_idx] = model.log_likelihood_f0(obs_t)
         return log_like
 
 

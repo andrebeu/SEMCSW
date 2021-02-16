@@ -16,7 +16,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 class SharedObj(object):
     """
-    NF helper methods
+    Methods common to TF and AB implementations
     """
     def __init__(self, d, var_df0=None, var_scale0=None, 
         optimizer=None, n_epochs=10, init_model=False,
@@ -119,6 +119,56 @@ class SharedObj(object):
         # to implicitly learn a hidden state. We'll assume this
         # vector has length appox equal to 1
         self.filler_vector = np.random.randn(self.d) / np.sqrt(self.d)
+    
+    # likelihood 
+
+    def log_likelihood_f0(self, Xp):
+        if not self.f0_is_trained:
+            if self.prior_probability:
+                return self.prior_probability
+            else: 
+                return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
+
+        # predict the initial point (# this has been precomputed for speed)
+        Xp_hat = self.predict_f0()
+
+        # calculate probability
+        logprob = self.fast_mvnorm_diagonal_logprob(
+                        Xp.reshape(-1) - Xp_hat.reshape(-1), 
+                    self.Sigma)
+        return logprob
+
+    def log_likelihood_sequence(self, X, Xp):
+        """ 
+        Xp :current observation (target)
+        X  :observation history (input)
+        """
+        print('log_like_seq')
+        ## case: inactive schema
+        if not self.f_is_trained:
+            if self.prior_probability:
+                return self.prior_probability
+            else: 
+                return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
+        
+        ## case: reused schema
+        Xp_hat = self.predict_next_generative(X)
+
+        # calculate probability
+        logprob = self.fast_mvnorm_diagonal_logprob(
+                        Xp.reshape(-1) - Xp_hat.reshape(-1), 
+                    self.Sigma)
+        return logprob
+
+    def log_likelihood(self,event):        
+        print('model loglike')
+        log_like = np.zeros(len(event))
+        log_like[0] = self.log_likelihood_f0(event[0])
+        for tstep in range(1,len(event)):
+            obs_hist = event[:tstep, :].reshape(-1, self.d)
+            obs_t = event[tstep,:] 
+            log_like[tstep] = self.log_likelihood_sequence(obs_hist, obs_t)
+        return log_like
 
 
     def fast_mvnorm_diagonal_logprob(self, x, variances):
@@ -172,10 +222,10 @@ class SharedObj(object):
         mode = (nu0 * var0 + n * v) / (nu0 + n + 2)
         return mode
 
-    
     def _update_variance(self):
         if np.shape(self.prediction_errors)[0] > 1:
             self.Sigma = self.map_variance(self.prediction_errors, self.var_df0, self.var_scale0)
+
 
 
 class TFobj(SharedObj):
@@ -320,79 +370,11 @@ class CSWEvent(TFobj):
         """
         return self.f0
 
-    def _predict_next(self, X):
-        self.model.set_weights(self.model_weights)
-        # Note: this function predicts the next conditioned on the training data the model has seen
-
-        if X.ndim > 1:
-            X = X[-1, :]  # only consider last example
-        assert np.ndim(X) == 1
-        assert X.shape[0] == self.d
-
-        x_test = X.reshape((1, self.d))
-
-        # concatenate current example with history of last t-1 examples
-        # this is for the recurrent part of the network
-        x_test = self._unroll(x_test)
-        return self.model.predict(x_test)
-
-    def predict_next(self, X):
-        """
-        wrapper for the prediction function that changes the prediction to the identity function
-        for untrained models (this is an initialization technique)
-
-        """
-        if not self.f_is_trained:
-            if np.ndim(X) > 1:
-                return np.copy(X[-1, :]).reshape(1, -1)
-            return np.copy(X).reshape(1, -1)
-
-        return self._predict_next(X)
-
     def predict_next_generative(self, X):
         """ set weights and data reshape """
         self.model.set_weights(self.model_weights)
         X0 = np.reshape(unroll_data(X, self.t)[-1, :, :], (1, self.t, self.d))
         return self.model.predict(X0)
-
-    # likelihood 
-
-    def log_likelihood_f0(self, Xp):
-        if not self.f0_is_trained:
-            if self.prior_probability:
-                return self.prior_probability
-            else: 
-                return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
-
-        # predict the initial point (# this has been precomputed for speed)
-        Xp_hat = self.predict_f0()
-
-        # calculate probability
-        logprob = self.fast_mvnorm_diagonal_logprob(
-                        Xp.reshape(-1) - Xp_hat.reshape(-1), 
-                    self.Sigma)
-        return logprob
-
-    def log_likelihood_sequence(self, X, Xp):
-        """ 
-        Xp :current observation (target)
-        X  :observation history (input)
-        """
-        print('log_like_seq')
-        ## case: inactive schema
-        if not self.f_is_trained:
-            if self.prior_probability:
-                return self.prior_probability
-            else: 
-                return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
-        ## case: reused schema
-        Xp_hat = self.predict_next_generative(X)
-
-        # calculate probability
-        logprob = self.fast_mvnorm_diagonal_logprob(
-                        Xp.reshape(-1) - Xp_hat.reshape(-1), 
-                    self.Sigma)
-        return logprob
 
     # WRAPPER
 
@@ -493,6 +475,10 @@ class CSWEvent(TFobj):
         if update_estimate:
             self.estimate()
             self.f_is_trained = True
+
+
+
+
 
 
 import torch as tr

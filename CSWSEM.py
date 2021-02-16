@@ -2,8 +2,7 @@
 import os
 import numpy as np
 import torch as tr
-
-
+ 
 
 DEBUG = True
 
@@ -12,7 +11,8 @@ DEBUG = True
 notes: 
 - implement conceptual replication
     - only diff is LSTM training procedure
-    - todo next: prepare assertion script
+    - todo : make csw task object
+    - todo : prepare assertion script
         - imports current csw task
         - init from existing nb
         - prediction error / variance estimate
@@ -22,6 +22,105 @@ notes:
         - caution/study "sem variance" problem
 
 """
+
+
+
+
+class CSWTask():
+    """ replicate paper tasks
+    """
+
+    def __init__(self,graph_pr):
+        # initialize transition {0:TA,1:TB}
+        # contains transition matrix A, and B
+        self.transitions = self._init_transition_matrix()
+        #
+        #
+        #
+        return None
+
+    def generate_trial(self,trial_idx,condition):
+        """ 
+        """
+        return None
+
+    def generate_experiment(self,condition,n_train,n_test):
+        """ 
+        exp arr of events (vec)
+        """
+
+        return exp
+
+    def _get_list_transitions(self,condition,n_train=10,n_test=2):
+        # generate the order of the events
+        list_transitions = []   
+        if condition == 'blocked':
+            list_transitions =  \
+                [0] * (n_train // 4) + \
+                [1] * (n_train // 4) + \
+                [0] * (n_train // 4) + \
+                [1] * (n_train // 4 )
+        elif condition == 'early':
+            list_transitions =  \
+                [0] * (n_train // 4) + \
+                [1] * (n_train // 4) + \
+                [0, 1] * (n_train // 4)
+        elif condition == 'middle':
+            list_transitions =  \
+                [0, 1] * (n_train // 8) + \
+                [0] * (n_train // 4) + \
+                [1] * (n_train // 4) + \
+                [0, 1] * (n_train // 8)
+        elif condition == 'late':
+            list_transitions =  \
+                [0, 1] * (n_train // 4) + \
+                [0] * (n_train // 4) + \
+                [1] * (n_train // 4)
+        elif condition == 'interleaved':
+            list_transitions = [0, 1] * (n_train // 2)
+        elif condition == 'single': ## DEBUG
+            list_transitions =  \
+                [0] * (n_train) 
+        else:
+            print('condition not properly specified')
+            assert False
+        list_transitions += [int(np.random.rand() < 0.5) for _ in range(n_test)]
+        return list_transitions
+
+    def _init_transition_matrix(self):
+        transition_probs_b = {
+            (0, 1): 1.0, 
+            (1, 3): 0.5, (1, 4): 0.5, 
+            (3, 5): 1.0,
+            (4, 6): 1.0, 
+            (5, 7): 1.0,
+            (6, 8): 1.0,
+            }
+        # "Deep Ocean Cafe" stories
+        transition_probs_c = {
+            (0, 2): 1.0, 
+            (2, 3): 0.5, (2, 4): 0.5, 
+            (3, 6): 1.0,
+            (4, 5): 1.0, 
+            (5, 8): 1.0,
+            (6, 7): 1.0,
+        }
+
+        def make_t_matrix(transition_prob_dict):
+            # transition matrix
+            t = np.zeros((10, 10))
+            for (x, y), p in transition_prob_dict.items():
+                t[x, y] = p
+            return t
+
+        transitions = {
+            0: make_t_matrix(transition_probs_b),
+            1: make_t_matrix(transition_probs_c)
+        }
+        return transitions
+
+
+
 
 class CSWNet(tr.nn.Module):
 
@@ -47,15 +146,6 @@ class CSWNet(tr.nn.Module):
         self.init_lstm = tr.nn.Parameter(tr.rand(2,1,self.stsize),requires_grad=True)
         self.ff_hid2ulog = tr.nn.Linear(self.stsize,self.smdim,bias=False)
         return None
-
-    # def embed(events_int):
-    #     return events_vec
-
-""" 
-    def update(self)
-    def compute_loglike(self,events)
-
-"""
 
     def forward(self,event):
         ''' main wrapper 
@@ -130,40 +220,47 @@ class CSWNet(tr.nn.Module):
             self.Sigma = self.map_variance(self.prediction_errors, self.var_df0, self.var_scale0)
 
 
-
-
-
 """ 
 """
 
-class SEM(SEMBase):
+class SEM(object):
 
-    def __init__(self, lmda=1., alfa=10.0, f_opts=None, seed=99, nosplit=True):
+    def __init__(self, lmda=1., alfa=10.0, f_opts=None, seed=99, nosplit=False):
         """
         """
-        SEMBase.__init__()
+        # SEMBase.__init__()
         # NTF: SEM internal state
         self.seed = seed
+        self.nosplit = nosplit
+        # params
         self.lmda = lmda
         self.alfa = alfa
+        # hopefully do not need obsdim and stsize
         self.obs_dim = 8
-        self.sch_stsize = 25
+        self.stsize = 25
         self.lr = 0.1
-        self.nosplit = nosplit
+        
+        #
+        self.active_schema_idx = 0
+        self.prev_schema_idx = None
         """
         schlib always has one "inactive" schema  
          similarly, dimensions of prior,likelihood,posterior
          will be len(schlib) == 1+num_active_schemas
         """
+        self._init_schlib()
+        
+
+        None 
+
+    def _init_schlib(self):
         self.prior = np.array([self.alfa,self.alfa])
         self.schema_count = np.array([0,0])
         self.schlib = [
-            CSWNet(self.sch_stsize,self.seed),
-            CSWNet(self.sch_stsize,self.seed+1)
+            CSWNet(self.stsize,self.seed),
+            CSWNet(self.stsize,self.seed+101)
             ] 
-        self.active_schema_idx = 0
-        self.prev_schema_idx = None
-        None 
+        return None
 
     def get_crp_prior(self):
         """ 
@@ -274,7 +371,7 @@ class SEM(SEMBase):
         if self.active_schema_idx == len(self.schema_count)-1:
             # print('new active schema')
             self.schema_count = np.concatenate([self.schema_count,[0]])
-            self.schlib.append(CSWNet(self.sch_stsize,self.seed))
+            self.schlib.append(CSWNet(self.stsize,self.seed))
         self.schema_count[self.active_schema_idx] += event_len
 
         ### GRADIENT STEP: UPDATE WINNING MODEL WEIGHTS
@@ -293,3 +390,5 @@ class SEM(SEMBase):
 
 
 
+
+softmax = lambda ulog: tr.softmax(ulog,-1)

@@ -2,4 +2,4 @@ nick meeting notes
 - MSE vs KL
 - what is fast_mvnorm_diagonal_logprob doing
 -- NB input is difference between obs and obs_hat
--  
+-  why handle f0 and rest differently?

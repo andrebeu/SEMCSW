@@ -122,56 +122,18 @@ class SharedObj(object):
     
     # likelihood 
 
-    def log_likelihood_f0(self, Xp):
-        if not self.f0_is_trained:
-            if self.prior_probability:
-                return self.prior_probability
-            else: 
-                return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
-
-        # predict the initial point (# this has been precomputed for speed)
-        Xp_hat = self.predict_f0()
-
-        # calculate probability
-        logprob = self.fast_mvnorm_diagonal_logprob(
-                        Xp.reshape(-1) - Xp_hat.reshape(-1), 
-                    self.Sigma)
-        return logprob
-
-    def log_likelihood_sequence(self, X, Xp):
-        """ 
-        Xp :current observation (target)
-        X  :observation history (input)
+    def log_likelihood(self,event):
+        """ wrapper
+        log_likelihood_f0, log_likelihood_sequence
         """
-        print('log_like_seq')
-        ## case: inactive schema
-        if not self.f_is_trained:
-            if self.prior_probability:
-                return self.prior_probability
-            else: 
-                return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
-        
-        ## case: reused schema
-        Xp_hat = self.predict_next_generative(X)
-
-        # calculate probability
-        logprob = self.fast_mvnorm_diagonal_logprob(
-                        Xp.reshape(-1) - Xp_hat.reshape(-1), 
-                    self.Sigma)
-        return logprob
-
-    def log_likelihood(self,event):        
-        print('model loglike')
-        log_like = np.zeros(len(event))
         # f0
+        log_like = np.zeros(len(event))
         log_like[0] = self.log_likelihood_f0(event[0])
-        # rest
         for tstep in range(1,len(event)):
             obs_hist = event[:tstep, :].reshape(-1, self.d)
             obs_t = event[tstep,:] 
             log_like[tstep] = self.log_likelihood_sequence(obs_hist, obs_t)
         return log_like
-
 
     def fast_mvnorm_diagonal_logprob(self, x, variances):
         """
@@ -359,6 +321,46 @@ class CSWEvent(TFobj):
         if init_model:
             self.init_model()
 
+    ## likelihood fns
+    def log_likelihood_f0(self, Xp):
+        if not self.f0_is_trained:
+            if self.prior_probability:
+                return self.prior_probability
+            else: 
+                return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
+
+        # predict the initial point (# this has been precomputed for speed)
+        Xp_hat = self.predict_f0()
+
+        # calculate probability
+        logprob = self.fast_mvnorm_diagonal_logprob(
+                        Xp.reshape(-1) - Xp_hat.reshape(-1), 
+                    self.Sigma)
+        return logprob
+
+    def log_likelihood_sequence(self, X, Xp):
+        """ 
+        Xp :current observation (target)
+        X  :observation history (input)
+        """
+        print('log_like_seq')
+        ## case: inactive schema
+        if not self.f_is_trained:
+            if self.prior_probability:
+                return self.prior_probability
+            else: 
+                return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
+        
+        ## case: reused schema
+        Xp_hat = self.predict_next_generative(X)
+
+        # calculate probability
+        logprob = self.fast_mvnorm_diagonal_logprob(
+                        Xp.reshape(-1) - Xp_hat.reshape(-1), 
+                    self.Sigma)
+        return logprob
+
+    # predict
     def _predict_f0(self):
         return self.predict_next_generative(self.filler_vector)
 
@@ -378,7 +380,7 @@ class CSWEvent(TFobj):
         X0 = np.reshape(unroll_data(X, self.t)[-1, :, :], (1, self.t, self.d))
         return self.model.predict(X0)
 
-    # WRAPPER
+    # controls batch sampling
 
     def estimate(self):
         """ optional: run batch gradient 
@@ -437,7 +439,7 @@ class CSWEvent(TFobj):
             self.model.train_on_batch(x_batch, xp_batch)
         self.model_weights = self.model.get_weights()
 
-    # called in CSWSEM
+    # update: called in CSWSEM
 
     def update_f0(self, Xp, update_estimate=True):
         """ 

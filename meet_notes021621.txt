@@ -1,0 +1,8 @@
+nick meeting notes
+- MSE vs KL ? 
+- what is fast_mvnorm_diagonal_logprob doing
+= mvnorm func calc loglikelihood of diagonal multivariate gaussian
+-- NB input is difference between obs and obs_hat
+-  why handle f0 and rest differently?
+- why handle untrained model differently in `log_likelihood_sequence`
+

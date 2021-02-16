@@ -3,51 +3,76 @@ import os
 import numpy as np
 import torch as tr
 
-from cswRNN import CSWEvent
-from CSW import CSWNet
-
 
 
 DEBUG = True
 
 
 """ 
+notes: 
+- implement conceptual replication
+    - only diff is LSTM training procedure
+    - todo next: prepare assertion script
+        - imports current csw task
+        - init from existing nb
+        - prediction error / variance estimate
+- run sem vs lstm
+    - small gridsearch 
+        - goal find dynamic range
+        - caution/study "sem variance" problem
+
 """
 
 class CSWNet(tr.nn.Module):
 
     def __init__(self,stsize,seed):
+
+        self.seed = seed
         super().__init__()
         tr.manual_seed(seed)
-        self.is_trained = False
-        self.seed = seed
+        ## network parameters
         self.stsize = stsize
         self.smdim = 12
+        ## init setting
+        self.is_trained = False
+        self._build()
+
+        return None
+
+    def _build(self):
+        ## architecture setup
+        # embedding handled within
         self.input_embed = tr.nn.Embedding(self.smdim,self.stsize)
         self.lstm = tr.nn.LSTMCell(self.stsize,self.stsize)
         self.init_lstm = tr.nn.Parameter(tr.rand(2,1,self.stsize),requires_grad=True)
         self.ff_hid2ulog = tr.nn.Linear(self.stsize,self.smdim,bias=False)
         return None
 
+    # def embed(events_int):
+    #     return events_vec
+
+""" 
+    def update(self)
+    def compute_loglike(self,events)
+
+"""
+
     def forward(self,event):
-        ''' event is [tsteps,scene_dim]
+        ''' main wrapper 
+        takes event, returns event_hat
+        event is [tsteps,scene_dim]
+        embed ints
         '''
         state_emb = self.input_embed(state_int)
-        h_lstm,c_lstm = self.init_lstm
+        h_lstm,c_lstm = self.init_lstm # rnn state
         outputs = -tr.ones(len(state_emb),self.stsize)
+        # explicit unroll not necessary
         for tstep in range(len(state_emb)):
             h_lstm,c_lstm = self.lstm(state_emb[tstep],(h_lstm,c_lstm))
             outputs[tstep] = h_lstm
         outputs = self.ff_hid2ulog(outputs)
         return outputs
 
-
-
-class SEMBase(object):
-
-    def __init__(self):
-
-        return None
 
     def fast_mvnorm_diagonal_logprob(self, x, variances):
         """
@@ -105,6 +130,11 @@ class SEMBase(object):
             self.Sigma = self.map_variance(self.prediction_errors, self.var_df0, self.var_scale0)
 
 
+
+
+
+""" 
+"""
 
 class SEM(SEMBase):
 
@@ -209,10 +239,12 @@ class SEM(SEMBase):
         return logprob
 
 
-
+    # run functions
 
     def run_trial(self, event, event_idx=None):
-        """ given an event, runs a single trial
+        """ 
+        todo: change event to event_int
+        given an event, runs a single trial
         """
         print('\n**process new event')
 

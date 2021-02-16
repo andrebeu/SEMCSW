@@ -38,53 +38,16 @@ class SharedObj(object):
         self.f0 = np.zeros(d)
 
         #### ~~~ Variance Prior Parameters ~~~~ ###
-        # in practice, only the mode of the variance prior
-        # matters at all. Changing the df/scale but maintaining
-        # the mode has no effect on the model behavior or the 
-        # implied variance. (It does facilitate magnitude of the 
-        # log likelihood, but not the dynamic range of the 
-        # log-likelihoods). As such, it is convient to fix the
-        # prior df and solve for the scale for some desired variance.
-        
-        
-        # allow for set DF and set scale to override the variance prior mode
-        if (var_df0 is not None) and (var_scale0 is not None):
-            variance_prior_mode = var_df0 / (var_df0 + 2) * var_scale0
-        
-        elif variance_prior_mode is None:
-            # in simulations, it is often convient to approximately 
-            # normalize the stim to unit length, or 
-            # X ~ N(0, (1/d) * I)
-            variance_prior_mode = 1 / d 
-        self.variance_prior_mode = variance_prior_mode
 
-        if var_df0 is None:
-            var_df0 = 1
-        self.var_df0 = var_df0
-
-        if var_scale0 is None:
-            var_scale0 = get_prior_scale(self.var_df0, variance_prior_mode)
-        self.var_scale0 = var_scale0
-
-        # also set a default prior log probability, inferred from the prior variance
-        # new way!! evaluate the probability of the trace as given a zero mean gaussian
-        # vector with the variance prior mode
-        # if prior_log_prob is None:
-            # # this is a decent approximation of what a random normalized vector would
-            # # under the generative process of X ~ N(0, var_scale0 * I),
-            # # which gives (in expectation) unit vectors
-            # 
-            # # note, norm uses standard deviation, not variance
-            # prior_log_prob = norm(0, variance_prior_mode ** 0.5).logpdf(
-            #     variance_prior_mode ** 0.5) * d
-            
-        self.prior_probability = prior_log_prob
-
+        # values taken from NF 
+        self.var_df0 = 1
+        self.var_scale0 = 0.3
         # how many observations do we consider in calculating the variance?
-        if variance_window is None:
-            variance_window = int(1e6) # this is plausiblely large...
-        self.variance_window = variance_window
-        
+        self.variance_window = int(1e6) 
+        self.Sigma = np.ones(d) * 0.1
+
+
+
         #### ~~~ END Variance Prior Parameters ~~~~ ###
 
         self.x_history = [np.zeros((0, self.d))]
@@ -108,15 +71,6 @@ class SharedObj(object):
         self.training_pairs = []
         self.prediction_errors = np.zeros((0, self.d), dtype=np.float)
         self.model_weights = None
-
-        # initialize the covariance with the mode of the prior distribution
-        self.Sigma = np.ones(d) * var_df0 * var_scale0 / (var_df0 + 2)
-
-        self.is_visited = False  # governs the special case of model's first prediction (i.e. with no experience)
-
-        # switch for inheritance -- don't want to init the model for sub-classes
-        if init_model:
-            self.init_model()
 
         # generate a vector to act as a placeholder for time-points
         # prior to the start of the event so as to allow the network 
@@ -191,6 +145,14 @@ class SharedObj(object):
         return mode
 
     def _update_variance(self):
+        """ 
+        prediction_error is shape (tsteps,obs_dim)
+            where tsteps is all tsteps of the past 
+            that a given schema was used for
+            e.g. assuming each trial is 5 tsteps
+                and that the same schema was used 
+                by the end of the 3rd trial, tsteps=15
+        """
         if np.shape(self.prediction_errors)[0] > 1:
             self.Sigma = self.map_variance(self.prediction_errors, self.var_df0, self.var_scale0)
 

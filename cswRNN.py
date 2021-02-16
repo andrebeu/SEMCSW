@@ -9,9 +9,13 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.backend import l2_normalize
 from sem.utils import unroll_data, get_prior_scale, delete_object_attributes
 
+
+
 ### there are a ~ton~ of tf warnings from Keras, suppress them here
 print("TensorFlow Version: {}".format(tf.__version__))
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+
 
 
 class SharedObj(object):
@@ -323,11 +327,11 @@ class CSWEvent(TFobj):
 
     ## likelihood fns
     def log_likelihood_f0(self, Xp):
+        """ 
+        Xp :current observation (target)
+        """
         if not self.f0_is_trained:
-            if self.prior_probability:
-                return self.prior_probability
-            else: 
-                return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
+            return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
 
         # predict the initial point (# this has been precomputed for speed)
         Xp_hat = self.predict_f0()
@@ -343,13 +347,9 @@ class CSWEvent(TFobj):
         Xp :current observation (target)
         X  :observation history (input)
         """
-        print('log_like_seq')
         ## case: inactive schema
         if not self.f_is_trained:
-            if self.prior_probability:
-                return self.prior_probability
-            else: 
-                return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
+            return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
         
         ## case: reused schema
         Xp_hat = self.predict_next_generative(X)
@@ -361,6 +361,7 @@ class CSWEvent(TFobj):
         return logprob
 
     # predict
+
     def _predict_f0(self):
         return self.predict_next_generative(self.filler_vector)
 
@@ -370,7 +371,6 @@ class CSWEvent(TFobj):
         for untrained models (this is an initialization technique)
 
         N.B. This answer is cached for speed
-
         """
         return self.f0
 
@@ -439,22 +439,24 @@ class CSWEvent(TFobj):
             self.model.train_on_batch(x_batch, xp_batch)
         self.model_weights = self.model.get_weights()
 
-    # update: called in CSWSEM
+    # called in CSWSEM
 
     def update_f0(self, Xp, update_estimate=True):
         """ 
-        called in CSWNET
+        given first timestep Xp
         """
         self.update(self.filler_vector, Xp, update_estimate=update_estimate)
         self.f0_is_trained = True
 
         # precompute f0 for speed
         self.f0 = self._predict_f0()
+        return None
 
     def update(self, X, Xp, update_estimate=True):
         """ 
         called in CSWNET
         """
+        print(X.shape,Xp.shape)
         if X.ndim > 1:
             X = X[-1, :]  # only consider last example
         assert X.ndim == 1
@@ -479,6 +481,7 @@ class CSWEvent(TFobj):
         if update_estimate:
             self.estimate()
             self.f_is_trained = True
+        return None
 
 
 
@@ -507,8 +510,8 @@ class CSWNet(tr.nn.Module):
     h_lstm,c_lstm = self.init_lstm
     outputs = -tr.ones(len(state_emb),self.stsize)
     for tstep in range(len(state_emb)):
-      h_lstm,c_lstm = self.lstm(state_emb[tstep],(h_lstm,c_lstm))
-      outputs[tstep] = h_lstm
+        h_lstm,c_lstm = self.lstm(state_emb[tstep],(h_lstm,c_lstm))
+        outputs[tstep] = h_lstm
     outputs = self.ff_hid2ulog(outputs)
     return outputs
 

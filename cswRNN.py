@@ -344,8 +344,8 @@ class CSWEvent(TFobj):
 
     def log_likelihood_sequence(self, X, Xp):
         """ 
-        Xp :current observation (target)
-        X  :observation history (input)
+        Xp : current observation (target)
+        X  : observation history (input)
         """
         ## case: inactive schema
         if not self.f_is_trained:
@@ -488,32 +488,7 @@ class CSWEvent(TFobj):
 
 
 
-import torch as tr
 
-class CSWNet(tr.nn.Module):
-
-  def __init__(self,stsize,seed):
-    super().__init__()
-    tr.manual_seed(seed)
-    self.seed = seed
-    self.stsize = stsize
-    self.smdim = 12
-    self.input_embed = tr.nn.Embedding(self.smdim,self.stsize)
-    self.lstm = tr.nn.LSTMCell(self.stsize,self.stsize)
-    self.init_lstm = tr.nn.Parameter(tr.rand(2,1,self.stsize),requires_grad=True)
-    self.ff_hid2ulog = tr.nn.Linear(self.stsize,self.smdim,bias=False)
-    return None
-
-  def forward(self,state_int):
-    ''' state_int contains ints [time,1] '''
-    state_emb = self.input_embed(state_int)
-    h_lstm,c_lstm = self.init_lstm
-    outputs = -tr.ones(len(state_emb),self.stsize)
-    for tstep in range(len(state_emb)):
-        h_lstm,c_lstm = self.lstm(state_emb[tstep],(h_lstm,c_lstm))
-        outputs[tstep] = h_lstm
-    outputs = self.ff_hid2ulog(outputs)
-    return outputs
 
 
 

@@ -131,9 +131,11 @@ class SharedObj(object):
         log_likelihood_f0, log_likelihood_sequence
         """
         # f0
+        print('sig f0',self.Sigma[:3])
         log_like = np.zeros(len(event))
         log_like[0] = self.log_likelihood_f0(event[0])
         for tstep in range(1,len(event)):
+            print('sig f%i'%tstep,self.Sigma[:3])
             obs_hist = event[:tstep, :].reshape(-1, self.d)
             obs_t = event[tstep,:] 
             log_like[tstep] = self.log_likelihood_sequence(obs_hist, obs_t)
@@ -151,6 +153,7 @@ class SharedObj(object):
         ------
             log-probability: float
         """
+        # print('mvnorm call, var',variances.shape,variances[:3])
         log_2pi = np.log(2.0 * np.pi)
         return -0.5 * (log_2pi * np.shape(x)[0] + np.sum(np.log(variances) + (x**2) / variances ))
 
@@ -191,8 +194,14 @@ class SharedObj(object):
         return mode
 
     def _update_variance(self):
+        print('in update variance')
+        print('PE',self.prediction_errors.shape)
+        print('PE dim 0',self.prediction_errors[:,0])
+        # print('in update sig, PE:',self.prediction_errors.shape)
         if np.shape(self.prediction_errors)[0] > 1:
+            print('sig before update',self.Sigma[:3])
             self.Sigma = self.map_variance(self.prediction_errors, self.var_df0, self.var_scale0)
+
 
 
 
@@ -330,6 +339,7 @@ class CSWEvent(TFobj):
         """ 
         Xp :current observation (target)
         """
+        # print('f0',self.Sigma[:3])
         if not self.f0_is_trained:
             return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
 
@@ -347,6 +357,7 @@ class CSWEvent(TFobj):
         Xp :current observation (target)
         X  :observation history (input)
         """
+        # print('f1',self.Sigma[:3])
         ## case: inactive schema
         if not self.f_is_trained:
             return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
@@ -384,7 +395,8 @@ class CSWEvent(TFobj):
 
     def estimate(self):
         """ optional: run batch gradient 
-        descent on all past event clusters """
+        descent on all past event clusters 
+        """
         if self.reset_weights:
             self.do_reset_weights()
         else:
@@ -401,6 +413,7 @@ class CSWEvent(TFobj):
                 
         # remove old observations from consideration of the variance
         t = np.max([0, np.shape(self.prediction_errors)[0] - self.variance_window])
+        print('****',t)
         self.prediction_errors = self.prediction_errors[t:, :]
 
         # update the variance
@@ -456,7 +469,7 @@ class CSWEvent(TFobj):
         """ 
         called in CSWNET
         """
-        print(X.shape,Xp.shape)
+        # print(X.shape,Xp.shape)
         if X.ndim > 1:
             X = X[-1, :]  # only consider last example
         assert X.ndim == 1

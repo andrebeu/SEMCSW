@@ -125,15 +125,13 @@ class BaseSEM(object):
 
         """
         print('r_w_bound')
-        # print(type(list_events),len(list_events),
-        #     type(list_events[0]),list_events[0].shape)
 
         # loop over events
 
         self.init_for_boundaries(list_events)
         if DEBUG:
             event_idx_L = [0,0,0,1,1,2,2,1,1,0]
-            event_idx_L = [0,0,0,1,1,1,1,1,1,0]
+            # event_idx_L = [0,0,0,1,1,1,1,1,1,0]
             for idx,event in enumerate(list_events):
                 self.update_single_event(event,event_idx=event_idx_L[idx])
         else:
@@ -336,8 +334,11 @@ class SEM(BaseSEM):
 
         ## LIKELIHOOD CALCULATION
         # likelihood is calculated for each step (tsteps x nschemas)
+        print('\n-NF start likelihood calc')
         lik,_x_hat,_sigma = self.calculate_likelihoods(x,active,prior)
+        print('\n-AB start likelihood calc')
         log_like_AB = self.calc_likelihood(event) # (tsteps,schemas)
+        print('-end likelihood calc')
         # print('NF-like',lik)
         # print('AB-like',log_like_AB,'\n')
         if self.prev_schema_idx!=None:
@@ -384,10 +385,12 @@ class SEM(BaseSEM):
         ### NF GRADIENT STEP: UPDATE WINNING MODEL WEIGHTS
         # update with first observation
         def update_model(model,event):
+            print('updatef0')
             model.update_f0(event[0])
             obs_prev = event[0]
             # update with subsequent observations
             for obs in event[1:]:
+                print('update')
                 model.update(obs_prev, obs)
                 obs_prev = obs
             return None
@@ -440,7 +443,7 @@ class SEM(BaseSEM):
         updates `lik` which contains log likelihood of *all schemas*
         NB NTF calculate lik of all active schemas and an extra schema 
         """
-        print('\n\n == NF like')
+        # print('\n\n == NF like')
 
         event = x
         event_len = np.shape(event)[0]
@@ -503,7 +506,7 @@ class SEM(BaseSEM):
             """
             # print('NTF: eval lik of models',active)
             for k0 in active:
-
+                # print('NF-sch',k0)
                 model = self.event_models[k0]
 
                 if not event_boundary:
@@ -514,16 +517,17 @@ class SEM(BaseSEM):
                     lik[ii, k0] = model.log_likelihood_f0(x_curr)
 
         return lik,_x_hat,_sigma
+    
     #AB
     def calc_likelihood(self,event):
         """ calculate likelihood for all schemas 
             - active schemas + one inactive schema
         """
-        print('\n\n == AB like')
         event_len = event.shape[0]
         num_schemas = len(self.event_models)
         log_like = np.zeros((event_len, num_schemas))
         for sch_idx in np.arange(num_schemas):
+            print('AB-sch',sch_idx)
             model = self.event_models[sch_idx]
             log_like[:,sch_idx] = model.log_likelihood(event)
         return log_like

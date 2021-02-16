@@ -456,7 +456,7 @@ class CSWEvent(TFobj):
         """ 
         called in CSWNET
         """
-        print(X.shape,Xp.shape)
+        
         if X.ndim > 1:
             X = X[-1, :]  # only consider last example
         assert X.ndim == 1

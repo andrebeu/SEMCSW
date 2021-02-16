@@ -129,89 +129,22 @@ class BaseSEM(object):
         #     type(list_events[0]),list_events[0].shape)
 
         # loop over events
-
         self.init_for_boundaries(list_events)
         if DEBUG:
             event_idx_L = [0,0,0,1,1,2,2,1,1,0]
-            event_idx_L = [0,0,0,1,1,1,1,1,1,0]
             for idx,event in enumerate(list_events):
                 self.update_single_event(event,event_idx=event_idx_L[idx])
         else:
             for event in list_events:
                 self.update_single_event(event)
         return None
-
-    def update_prior_and_posterior_of_event_model(self,x):
-        """ 
-        only a few models are 'active', but here NTF expands dimension
-        of prior for every new event 
-        """
-        event_len = np.shape(x)[0]
-        ## update prior and posterior of event model
-        self.k += 1
-        self._update_state(x, self.k)
-
-        # pull the relevant items from the results
-        if self.results is None:
-            self.results = Results()
-            post = np.zeros((1, self.k))
-            log_like = np.zeros((1, self.k)) - np.inf
-            log_prior = np.zeros((1, self.k)) - np.inf
-            x_hat = np.zeros((event_len, self.d))
-            sigma = np.zeros((event_len, self.d))
-            scene_log_like = np.zeros((event_len, self.k)) - np.inf # for debugging
-        
-        else:
-            post = self.results.post
-            log_like = self.results.log_like
-            log_prior = self.results.log_prior
-            x_hat = self.results.x_hat
-            sigma = self.results.sigma
-            scene_log_like = self.results.scene_log_like  # for debugging
-
-            # extend the size of the posterior, etc
-
-            n, k0 = np.shape(post)
-            while k0 < self.k:
-                post = np.concatenate([post, np.zeros((n, 1))], axis=1)
-                log_like = np.concatenate([log_like, np.zeros((n, 1)) - np.inf], axis=1)
-                log_prior = np.concatenate([log_prior, np.zeros((n, 1)) - np.inf], axis=1)
-                n, k0 = np.shape(post)
-
-                scene_log_like = np.concatenate([
-                    scene_log_like, np.zeros(
-                        (np.shape(scene_log_like)[0], 1)) - np.inf
-                    ], axis=1)
-
-            # extend the size of the posterior, etc
-            post = np.concatenate([post, np.zeros((1, self.k))], axis=0)
-            log_like = np.concatenate([log_like, np.zeros((1, self.k)) - np.inf], axis=0)
-            log_prior = np.concatenate([log_prior, np.zeros((1, self.k)) - np.inf], axis=0)
-            x_hat = np.concatenate([x_hat, np.zeros((event_len, self.d))], axis=0)
-            sigma = np.concatenate([sigma, np.zeros((event_len, self.d))], axis=0)
-            scene_log_like = np.concatenate([scene_log_like, np.zeros((event_len, self.k)) - np.inf], axis=0)
-        
-        return log_like,log_prior,post,x_hat,sigma,scene_log_like
-    
-    def verify_active_models(self,active):
-        """ loop through each potentially active event model and verify 
-            a model has been initialized
-        """
-        for k0 in active:
-            if k0 not in self.event_models.keys():
-                new_model = self.f_class(self.d, **self.f_opts)
-                if self.model is None:
-                    self.model = new_model.init_model()
-                else:
-                    new_model.set_model(self.model)
-                self.event_models[k0] = new_model
-        return None
-
+  
     def clear(self):
         """ This function deletes sem from memory"""
         self.clear_event_models()
         delete_object_attributes(self.results)
         delete_object_attributes(self)
+
 
 
 class SEM(BaseSEM):
@@ -279,23 +212,21 @@ class SEM(BaseSEM):
         assert len(prior) == len(self.schlib)
         return prior
 
-    def _calculate_unnormed_sCRP(self, prev_cluster=None):
+    def get_active_schema_idx(self,log_prior,log_like):
         """ 
-        self.k is max number of clusters
+        splitting SEM uses argmax of posterior log probability
+        nonsplitting SEM takes single event
         """
-        # internal function for consistency across "run" methods
-        # calculate sCRP prior
-        prior = self.c.copy()
-        idx = len(np.nonzero(self.c)[0])  # get number of visited clusters
-        if idx <= self.k:
-            prior[idx] += self.alfa  # set new cluster probability to alpha
-        # add stickiness parameter for n>0, only for the previously chosen event
-        if prev_cluster is not None:
-            prior[prev_cluster] += self.lmda
-        # prior /= np.sum(prior)
-        return prior
+        if self.prev_schema_idx==None:
+            # handle differences with NF indexing
+            return 0
+        log_post = log_prior + log_like
+        # post[-1, :self.n_schemas] = np.exp(log_post - logsumexp(log_post))
+        k = np.argmax(log_post)
+        # self.results.post = post
+        return k
 
-    def update_single_event(self, x, event_idx=None, update=True):
+    def update_single_event(self, event, event_idx=None, update=True):
         """
         x: num_events x obs_dim
         `lik` :array num_events x len(schema_lib) with log_likelihoods. 
@@ -312,65 +243,32 @@ class SEM(BaseSEM):
         """
         print('\n**process new event')
 
-        event = x 
         event_len = np.shape(event)[0]
-        
-        (log_like,log_prior,post,x_hat,sigma,scene_log_like
-            ) = self.update_prior_and_posterior_of_event_model(x)
 
         ## PRIOR CALCULATION
-        prior = self._calculate_unnormed_sCRP(self.k_prev)
         prior_AB = self.get_crp_prior()
-
-        # active
-        active = np.nonzero(prior)[0]
-        self.n_schemas = len(active)
-        assert active[-1]==len(active)-1
         
         ## log prior
-        log_prior[-1, :self.n_schemas] = np.log(prior[:self.n_schemas])
         log_prior_AB = np.log(prior_AB)
-        # print('NF-logprior\n',log_prior[-1, :self.n_schemas])
-        # print('AB-logprior\n',log_prior_AB,'\n')
-        assert np.alltrue(log_prior_AB==log_prior[-1, :self.n_schemas])
 
         ## LIKELIHOOD CALCULATION
-        # likelihood is calculated for each step (tsteps x nschemas)
-        lik,_x_hat,_sigma = self.calculate_likelihoods(x,active,prior)
         log_like_AB = self.calc_likelihood(event) # (tsteps,schemas)
-        # print('NF-like',lik)
-        # print('AB-like',log_like_AB,'\n')
-        if self.prev_schema_idx!=None:
-            assert (np.alltrue(log_like_AB==lik))
         
         ## collapse log_like over obs 
-        log_like[-1, :self.n_schemas] = np.sum(lik, axis=0) 
         log_like_AB = np.sum(log_like_AB,axis=0)
-        # print('NF-sum_loglike',log_like[-1, :self.n_schemas])
-        # print('AB-sum_loglike',log_like_AB,'\n')
-        if self.prev_schema_idx !=None:
-            assert np.alltrue(log_like_AB == log_like[-1, :self.n_schemas])
 
         ## USE PRIOR AND LIKELIHOOD TO SELECT MODEL
-        k = self.active_schema_idx = self.get_winning_model(post,log_prior,log_like)
         self.active_schema_idx = self.get_active_schema_idx(log_prior_AB,log_like_AB)
-        # print('NF-schemaidx',k)
-        # print('AB-schemaidx',self.active_schema_idx,'\n')
-        assert (self.active_schema_idx == k)
-        ## ~\~ SEM calculate eventmodel likes and select winning model
 
         ## specify model debug 
         if DEBUG:
-            self.active_schema_idx = k = event_idx
+            self.active_schema_idx = event_idx
 
         print(
             'num schemas',len(self.schlib),
             'schema_idx',self.active_schema_idx
             )
 
-        ## cache for next event/story
-        self.k_prev = k
-        self.c[k] += event_len
         self.prev_schema_idx = self.active_schema_idx
 
         ## if new active_schema, update schlib
@@ -381,140 +279,10 @@ class SEM(BaseSEM):
         self.schema_count[self.active_schema_idx] += event_len
 
 
-        ### NF GRADIENT STEP: UPDATE WINNING MODEL WEIGHTS
-        # update with first observation
-        def update_model(model,event):
-            model.update_f0(event[0])
-            obs_prev = event[0]
-            # update with subsequent observations
-            for obs in event[1:]:
-                model.update(obs_prev, obs)
-                obs_prev = obs
-            return None
-        print('-')
-        NF_active_model = self.event_models[k]
-        update_model(NF_active_model,event)
-        ## ~/~ gradient update winning model weights
-
-        # collect RESULTS 
-        self.results.log_like = log_like
-        self.results.log_prior = log_prior
-        self.results.e_hat = np.argmax(post, axis=1)
-        self.results.log_loss = logsumexp(log_like + log_prior, axis=1)
-        scene_log_like[-event_len:, :self.n_schemas] = lik
-        self.results.scene_log_like = scene_log_like
-        x_hat[-event_len:, :] = _x_hat
-        sigma[-event_len:, :] = _sigma
-        self.results.x_hat = x_hat
-        self.results.sigma = sigma
+        ### GRADIENT STEP: UPDATE WINNING MODEL WEIGHTS
+      
         return None
 
-    def get_winning_model(self,post,log_prior,log_like):
-        """ 
-        splitting SEM uses argmax of posterior log probability
-        nonsplitting SEM takes single event
-        """
-        log_post = log_prior[-1, :self.n_schemas] + log_like[-1, :self.n_schemas]
-        post[-1, :self.n_schemas] = np.exp(log_post - logsumexp(log_post))
-        k = np.argmax(log_post)
-        self.results.post = post
-        return k
-
-    def get_active_schema_idx(self,log_prior,log_like):
-        """ 
-        splitting SEM uses argmax of posterior log probability
-        nonsplitting SEM takes single event
-        """
-        if self.prev_schema_idx==None:
-            # handle differences with NF indexing
-            return 0
-        log_post = log_prior + log_like
-        # post[-1, :self.n_schemas] = np.exp(log_post - logsumexp(log_post))
-        k = np.argmax(log_post)
-        # self.results.post = post
-        return k
-
-    #NF
-    def calculate_likelihoods(self,x,active,prior):
-        """ 
-        updates `lik` which contains log likelihood of *all schemas*
-        NB NTF calculate lik of all active schemas and an extra schema 
-        """
-        print('\n\n == NF like')
-
-        event = x
-        event_len = np.shape(event)[0]
-        """ NTF
-        this is a readout of the model only and not used for updating,
-            but also keep track of the within event posterior
-        """
-        _x_hat = np.zeros((event_len, self.d))  # temporary storre
-        _sigma = np.zeros((event_len, self.d))
-
-        ### initialize array 
-        """ iteratively calculate likelihood of each obs
-        """        
-        lik = np.zeros((event_len, self.n_schemas))
-
-        for ii, x_curr in enumerate(event):
-            obs = x_curr
-            # print('new obs')
-            """ NTF
-            need to maintain a distribution over 
-            possible event types for the current events --
-            this gets locked down after termination of the event.
-            Also: none of the event models can be updated until 
-            *after* the event has been observed
-            """
-            # special case the first scene within the event
-            if ii == 0:
-                event_boundary = True
-            else:
-                event_boundary = False
-
-            # can i pull this out of the loop?
-            self.verify_active_models(active)
-            
-            #~# using active schema, calculate xhats. 
-            """ this might just be for evaluation 
-            - the reason this needs to be in this loop is `lik` 
-                is updating. does that allow for different models
-                to predict different timesteps within event?
-            - 
-            """
-            if ii == 0:
-                # prior to the first scene within an event having been observed
-                k_within_event = np.argmax(prior) 
-                _x_hat[ii, :] = self.event_models[k_within_event].predict_f0() 
-            else:
-                # otherwise, use previously observed scenes
-                k_within_event = np.argmax(
-                    np.sum(lik[:ii, :self.n_schemas], axis=0) + np.log(prior[:self.n_schemas]))
-                _x_hat[ii, :] = self.event_models[k_within_event].predict_next_generative(x[:ii, :])
-                
-            _sigma[ii, :] = self.event_models[k_within_event].get_variance()
-
-            #~\# using active schema, calculate xhats. 
-
-            """
-            Inference: calculate likelihood of each active event model
-            `log_likelihood_sequence` makes prediction using 
-            and evaluates likelihood of prediction
-            """
-            # print('NTF: eval lik of models',active)
-            for k0 in active:
-
-                model = self.event_models[k0]
-
-                if not event_boundary:
-                    lik[ii, k0] = model.log_likelihood_sequence(
-                        x[:ii, :].reshape(-1, self.d), x_curr
-                        )
-                else:
-                    lik[ii, k0] = model.log_likelihood_f0(x_curr)
-
-        return lik,_x_hat,_sigma
-    #AB
     def calc_likelihood(self,event):
         """ calculate likelihood for all schemas 
             - active schemas + one inactive schema

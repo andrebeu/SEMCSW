@@ -78,8 +78,7 @@ for case in range(1):
 
     for model_type in ['SEM']:
       print('---',model_type)
-      results, trialXtrial, _ = seed_exp( 
-                    sem_kwargs, model_type=model_type, 
-                    n_train=n_train, n_test=n_test,
-                    condition=condition,seed=seed,
+      seed_exp(sem_kwargs, model_type=model_type, 
+        n_train=n_train, n_test=n_test,
+        condition=condition,seed=seed,
       )

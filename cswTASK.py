@@ -535,20 +535,9 @@ def seed_exp(sem_kwargs, stories_kwargs=None, n_train=160, n_test=40,
     stories_kwargs['n_train'] = n_train
     stories_kwargs['n_test'] = n_test
     
-    results = []
-    boundaries = []
-    prediction_err = []
-    trialXtrial = []
 
     print('seed',seed,'condition',condition)
 
-    ## helper function, used later ##
-    # add batch number and condition to all of the results
-    def add_batch_cond(json_data):
-        for ii in range(len(json_data)):
-            json_data[ii]['seed'] = seed
-            json_data[ii]['condition'] = condition
-        return json_data
     ##  ~~~~~~~~~~~~~~~~~~~~~~~~  ##
 
     # generate experiment
@@ -556,27 +545,12 @@ def seed_exp(sem_kwargs, stories_kwargs=None, n_train=160, n_test=40,
 
     ## run the model
     run_kwargs = dict()
-    """ task is predict next scene, 
-    therefore only pass x for training
-    """
-    if model_type == 'SEM':
-        _sem_results = sem_run_with_boundaries(
-            x, sem_kwargs, run_kwargs)
-    elif model_type == 'LSTM':
-        _sem_results = no_split_sem_run_with_boundaries(
-            x, sem_kwargs, run_kwargs)
-    _sem_results.x_orig = np.concatenate(x)
+    sem_init_kwargs= dict()
+    # init an run
+    sem_model = SEM(**sem_init_kwargs)
+    # sem_model.run_w_boundaries(x, **run_kwargs)
 
-    ## scores results
-    _res, _trialX = score_results(_sem_results, e, y, 
-        n_train=n_train, n_test=n_test, condensed=True)
-    
-    results += add_batch_cond(_res)
-    trialXtrial += add_batch_cond(_trialX)
-
-
-    output = (results, trialXtrial, None)
-    return output
+    return None
 
 
 if __name__ == "__main__":

@@ -383,9 +383,7 @@ class SEM(BaseSEM):
 
         ### NF GRADIENT STEP: UPDATE WINNING MODEL WEIGHTS
         # update with first observation
-        
         def update_model(model,event):
-            print('-')
             model.update_f0(event[0])
             obs_prev = event[0]
             # update with subsequent observations
@@ -393,7 +391,7 @@ class SEM(BaseSEM):
                 model.update(obs_prev, obs)
                 obs_prev = obs
             return None
-
+        print('-')
         NF_active_model = self.event_models[k]
         update_model(NF_active_model,event)
         ## ~/~ gradient update winning model weights
@@ -436,6 +434,7 @@ class SEM(BaseSEM):
         # self.results.post = post
         return k
 
+    #NF
     def calculate_likelihoods(self,x,active,prior):
         """ 
         updates `lik` which contains log likelihood of *all schemas*
@@ -515,7 +514,7 @@ class SEM(BaseSEM):
                     lik[ii, k0] = model.log_likelihood_f0(x_curr)
 
         return lik,_x_hat,_sigma
-
+    #AB
     def calc_likelihood(self,event):
         """ calculate likelihood for all schemas 
             - active schemas + one inactive schema
@@ -527,22 +526,6 @@ class SEM(BaseSEM):
         for sch_idx in np.arange(num_schemas):
             model = self.event_models[sch_idx]
             log_like[:,sch_idx] = model.log_likelihood(event)
-        return log_like
-
-        # ## NF
-        # num_schemas_NF = len(self.event_models)
-        # 
-        # for sch_idx in np.arange(num_schemas_NF):
-        #     model = self.event_models[sch_idx]
-        #     for tstep in range(len(event)):
-        #         obs_hist = event[:tstep, :].reshape(-1, self.d)
-        #         obs_t = event[tstep,:]   
-        #         if not tstep==0:
-        #             log_like_NF[tstep, sch_idx] = model.log_likelihood_sequence(
-        #                 obs_hist, obs_t
-        #                 )
-        #         else:
-        #             log_like_NF[tstep, sch_idx] = model.log_likelihood_f0(obs_t)
         return log_like
 
 

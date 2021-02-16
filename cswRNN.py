@@ -163,7 +163,9 @@ class SharedObj(object):
     def log_likelihood(self,event):        
         print('model loglike')
         log_like = np.zeros(len(event))
+        # f0
         log_like[0] = self.log_likelihood_f0(event[0])
+        # rest
         for tstep in range(1,len(event)):
             obs_hist = event[:tstep, :].reshape(-1, self.d)
             obs_t = event[tstep,:] 

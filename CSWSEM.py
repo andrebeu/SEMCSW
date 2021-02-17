@@ -13,11 +13,6 @@ DEBUG = True
 notes: 
 - implement conceptual replication
     - only diff is LSTM training procedure
-    - todo : make csw task object
-    - todo : prepare assertion script
-        - imports current csw task
-        - init from existing nb
-        - prediction error / variance estimate
 - run sem vs lstm
     - small gridsearch 
         - goal find dynamic range
@@ -31,15 +26,20 @@ event_target (len5): Lt,...,Et
 
 class CSWSchema(tr.nn.Module):
 
-    def __init__(self,stsize,seed):
+    def __init__(self,stsize,seed,learn_rate):
         super().__init__()
         ## network parameters
         self.stsize = stsize
         self.obsdim = 10
+        self.learn_rate = learn_rate
         # setup
         self.seed = seed
         tr.manual_seed(seed)
         self._build()
+        # backprop
+        self.lossop = tr.nn.MSELoss()
+        self.optiop = tr.optim.Adam(
+            self.parameters(), lr=self.learn_rate)
         # init settings
         self.is_active = False
         # loglike params (from NF)
@@ -81,9 +81,27 @@ class CSWSchema(tr.nn.Module):
             event_hat = event_hat.squeeze().detach().numpy()
         return event_hat
 
-    def backprop(self):
+    def backprop(self,event):
+        """ update weights and 
+        compute prediction errors
+        """
+        event_hat = self.forward(event)
+        event_target = tr.Tensor(event[1:]).unsqueeze(1) 
+        ## update variance
+        self.update_variance(event_hat,event_target)
+        ## back prop
+        loss = 0
+        self.optiop.zero_grad()
+        for tstep in range(len(event_hat)):
+            loss += self.lossop(
+                event_hat[tstep],
+                event_target[tstep]
+                )
+            loss.backward(retain_graph=True)
+        self.optiop.step()
         self.is_active = True
-        return None
+        # update variance
+        return loss
 
 
     def calc_loglike_inactive(self,event):
@@ -108,15 +126,11 @@ class CSWSchema(tr.nn.Module):
         - not fully confident with handling of inactive schema 
 
         """
-        print('===schema-like',event.shape)
-        print('sig',self.sigma)
         ## case: new inactive schema
         if not self.is_active:
-            print('case new schema')
             return self.calc_loglike_inactive(event)
         ## case: reused schema
         # calculate probability
-        print('case active schema')
         loglike = 0
         event_hat = self.forward(event,np=1)
         event_target = event[1:] # rm END
@@ -179,16 +193,20 @@ class CSWSchema(tr.nn.Module):
         mode = (nu0 * var0 + n * v) / (nu0 + n + 2)
         return mode
 
-    def update_variance(self,prediction_errors):
-        self.sigma = self.map_variance(prediction_errors, 
+    def update_variance(self,event_hat,event_target):
+        event_hat = event_hat.detach().numpy().squeeze()
+        event_target = event_target.detach().numpy().squeeze()
+        prediction_error = event_hat - event_target
+        self.sigma = self.map_variance(prediction_error, 
                         self.var_df0, self.var_scale0)
+        return prediction_error
 
 
 
 
 class SEM(object):
 
-    def __init__(self, lmda, alfa, f_opts=None, seed=99, nosplit=False):
+    def __init__(self, lmda, alfa, f_opts=None, seed=99, learn_rate=0.05,nosplit=False):
         """
         """
         # SEMBase.__init__()
@@ -200,7 +218,7 @@ class SEM(object):
         # hopefully do not need obsdim and stsize
         self.obsdim = 10
         self.stsize = 25
-        self.lr = 0.1
+        self.learn_rate = learn_rate
         #
         self.active_schema_idx = 0
         self.prev_schema_idx = None
@@ -217,8 +235,8 @@ class SEM(object):
         self.prior = np.array([self.alfa,self.alfa])
         self.schema_count = np.array([0,0])
         self.schlib = [
-            CSWSchema(self.stsize,self.seed),
-            CSWSchema(self.stsize,self.seed+101)
+            CSWSchema(self.stsize,self.seed,self.learn_rate),
+            CSWSchema(self.stsize,self.seed+101,self.learn_rate)
             ] 
         return None
 
@@ -258,7 +276,6 @@ class SEM(object):
         """ wrapper around schema.calc_like
             - active schemas + one inactive schema
         """
-        print('==SEM-like')
         event_len = event.shape[0]
         num_schemas = len(self.schlib)
         log_like = -np.ones((num_schemas,event_len))
@@ -277,7 +294,7 @@ class SEM(object):
         - calculate likelihood under each active model
         - make predictions
         """
-        print('=SEM-forward_trial')
+        print('-SEM_forward_trial')
 
         # prior
         log_prior = self.get_crp_logprior()
@@ -288,37 +305,30 @@ class SEM(object):
         self.active_schema_idx = self.get_active_schema_idx(log_prior,log_like)
         self.prev_schema_idx = self.active_schema_idx
 
-        # if DEBUG:
-        #     self.active_schema_idx = event_idx
-
         ## if new active_schema, update schlib
         if self.active_schema_idx == len(self.schema_count)-1:
             # print('new active schema')
             self.schema_count = np.concatenate([self.schema_count,[0]])
-            self.schlib.append(CSWSchema(self.stsize,self.seed))
+            self.schlib.append(CSWSchema(self.stsize,self.seed,self.learn_rate))
         self.schema_count[self.active_schema_idx] += len(event)
 
         ### GRADIENT STEP: UPDATE WINNING MODEL WEIGHTS
         ### GRADIENT STEP: UPDATE WINNING MODEL WEIGHTS
         active_schema = self.schlib[self.active_schema_idx]
-        active_schema.backprop()
-        # update variance
-        event_hat = active_schema.forward(event,np=1)
-        event_target = event[1:]
-        prediction_error = event_hat - event_target
-        active_schema.update_variance(prediction_error)
-
-        return None
+        loss = active_schema.backprop(event)
+        print(loss)
+        return loss
 
     def forward_exp(self, exp):
         """
         wrapper for run_trial
         """
         # loop over events
+        lossL = []
         for event in exp:
-            print()
-            _ = self.forward_trial(event)
-        return None
+            loss_tr = self.forward_trial(event)
+            lossL.append(loss_tr)
+        return lossL
   
 
 

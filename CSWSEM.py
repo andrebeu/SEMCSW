@@ -117,16 +117,14 @@ class CSWSchema(tr.nn.Module):
         ## case: reused schema
         # calculate probability
         print('case active schema')
-        logprob = 0
+        loglike = 0
         event_hat = self.forward(event,np=1)
         event_target = event[1:] # rm END
         assert event_hat.shape == event_target.shape
         for scene_target,scene_hat in zip(event_target,event_hat):
-            logprob += self.fast_mvnorm_diagonal_logprob(
+            loglike += self.fast_mvnorm_diagonal_logprob(
                             scene_target.reshape(-1) - scene_hat.reshape(-1), 
                         self.sigma)
-        # prediction error?
-        loglike=None
         return loglike
 
 
@@ -281,9 +279,6 @@ class SEM(object):
         """
         print('=SEM-forward_trial')
 
-        event_len = np.shape(event)[0]
-        print('EL',event_len)
-
         # prior
         log_prior = self.get_crp_logprior()
         # likelihood
@@ -301,12 +296,13 @@ class SEM(object):
             # print('new active schema')
             self.schema_count = np.concatenate([self.schema_count,[0]])
             self.schlib.append(CSWSchema(self.stsize,self.seed))
-        self.schema_count[self.active_schema_idx] += event_len
+        self.schema_count[self.active_schema_idx] += len(event)
 
         ### GRADIENT STEP: UPDATE WINNING MODEL WEIGHTS
         ### GRADIENT STEP: UPDATE WINNING MODEL WEIGHTS
         active_schema = self.schlib[self.active_schema_idx]
         active_schema.backprop()
+        # update variance
         event_hat = active_schema.forward(event,np=1)
         event_target = event[1:]
         prediction_error = event_hat - event_target

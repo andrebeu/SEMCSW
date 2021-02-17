@@ -2,7 +2,9 @@
 import os
 import numpy as np
 import torch as tr
- 
+
+# PDF normal continuous random varaible
+from scipy.stats import norm
 
 DEBUG = True
 
@@ -21,178 +23,109 @@ notes:
         - goal find dynamic range
         - caution/study "sem variance" problem
 
-where do i handle embedding?
+event (len6): B,L,2,3,4,E
+event_hat (len5): Lh,2h,3h,4h,Eh
+event_target (len5): Lt,...,Et
 """
 
 
-
-
-class CSWTask():
-    """ replicate paper tasks
-    """
-
-    def __init__(self):
-        # initialize transition {0:TA,1:TB}
-        # contains transition matrix A, and B
-        self.transitions = self.init_transition_matrix()
-        self.obsdim = 10
-        self.tsteps = 5
-        #
-        #
-        #
-        return None
-
-    def generate_trial(self,trial_idx,condition):
-        """ might not be needed
-
-        """
-        return None
-
-    ## fix exp sampling
-    def generate_experiment(self,condition,n_train,n_test):
-        """ 
-        exp arr of events (vec)
-        returns [n_train+n_test,tsteps,obsdim]
-        """
-        # print(self.transitions[0])
-
-        curr = self.get_curriculum(condition,n_train,n_test)
-        # transition matrices
-        exp_int = -np.ones([n_train+n_test,self.tsteps])
-        for trial_idx in range(n_train+n_test):
-            print('trial',trial_idx)
-            event_type = curr[trial_idx]
-            tmat = transition_matrix = self.transitions[event_type]
-            print('tmat',tmat)
-            scene = 0
-            while scene < 7:
-                print('--',scene)
-                print(tmat[scene, :])
-                scene = np.arange(9)[
-                    np.sum(np.cumsum(tmat[scene, :]) < np.random.uniform(0, 1))
-                    ]
-                
-        exp = None
-
-        return exp
-
-    def get_curriculum(self,condition,n_train,n_test):
-        """ 
-        order of events
-        NB blocked: ntrain needs to be divisible by 4
-        """
-    
-        list_transitions = []   
-        if condition == 'blocked':
-            assert n_train%4==0
-            list_transitions =  \
-                [0] * (n_train // 4) + \
-                [1] * (n_train // 4) + \
-                [0] * (n_train // 4) + \
-                [1] * (n_train // 4 )
-        elif condition == 'early':
-            list_transitions =  \
-                [0] * (n_train // 4) + \
-                [1] * (n_train // 4) + \
-                [0, 1] * (n_train // 4)
-        elif condition == 'middle':
-            list_transitions =  \
-                [0, 1] * (n_train // 8) + \
-                [0] * (n_train // 4) + \
-                [1] * (n_train // 4) + \
-                [0, 1] * (n_train // 8)
-        elif condition == 'late':
-            list_transitions =  \
-                [0, 1] * (n_train // 4) + \
-                [0] * (n_train // 4) + \
-                [1] * (n_train // 4)
-        elif condition == 'interleaved':
-            list_transitions = [0, 1] * (n_train // 2)
-        elif condition == 'single': ## DEBUG
-            list_transitions =  \
-                [0] * (n_train) 
-        else:
-            print('condition not properly specified')
-            assert False
-        # 
-        list_transitions += [int(np.random.rand() < 0.5) for _ in range(n_test)]
-        print(321,len(list_transitions))
-        return np.array(list_transitions)
-
-    def init_transition_matrix(self):
-        transition_probs_b = {
-            (0, 1): 1.0, 
-            (1, 3): 0.5, (1, 4): 0.5, 
-            (3, 5): 1.0,
-            (4, 6): 1.0, 
-            (5, 7): 1.0,
-            (6, 8): 1.0,
-            }
-        # "Deep Ocean Cafe" stories
-        transition_probs_c = {
-            (0, 2): 1.0, 
-            (2, 3): 0.5, (2, 4): 0.5, 
-            (3, 6): 1.0,
-            (4, 5): 1.0, 
-            (5, 8): 1.0,
-            (6, 7): 1.0,
-        }
-
-        def make_t_matrix(transition_prob_dict):
-            # transition matrix
-            t = np.zeros((10, 10)).astype(int)
-            for (x, y), p in transition_prob_dict.items():
-                t[x, y] = p
-            return t
-
-        transitions = {
-            0: make_t_matrix(transition_probs_b),
-            1: make_t_matrix(transition_probs_c)
-        }
-        return transitions
-
-
-class CSWNet(tr.nn.Module):
+class CSWSchema(tr.nn.Module):
 
     def __init__(self,stsize,seed):
-
-        self.seed = seed
         super().__init__()
-        tr.manual_seed(seed)
         ## network parameters
         self.stsize = stsize
-        self.smdim = 12
-        ## init setting
-        self.is_trained = False
+        self.obsdim = 10
+        # setup
+        self.seed = seed
+        tr.manual_seed(seed)
         self._build()
+        # init settings
+        self.is_active = False
+        # loglike params (from NF)
+        # NB a function of obs dimension
+        self.variance_prior_mode = 1/self.obsdim
+        self.var_df0 = 1
+        self.var_scale0 = 0.3
+        # self.var_scale0 = get_prior_scale(self.var_df0, variance_prior_mode)
 
         return None
 
     def _build(self):
         ## architecture setup
         # embedding handled within
-        self.input_embed = tr.nn.Embedding(self.smdim,self.stsize)
-        self.lstm = tr.nn.LSTMCell(self.stsize,self.stsize)
-        self.init_lstm = tr.nn.Parameter(tr.rand(2,1,self.stsize),requires_grad=True)
-        self.ff_hid2ulog = tr.nn.Linear(self.stsize,self.smdim,bias=False)
+        self.in_layer = tr.nn.Linear(self.obsdim,self.stsize)
+        self.lstm = tr.nn.LSTM(self.stsize,self.stsize)
+        self.init_lstm = tr.nn.Parameter(tr.rand(2,1,1,self.stsize),requires_grad=True)
+        self.out_layer = tr.nn.Linear(self.stsize,self.obsdim)
         return None
 
-    def forward(self,event):
+    def forward(self,event,np=False):
         ''' main wrapper 
         takes event, returns event_hat
         event is [tsteps,scene_dim]
         embed ints
+        np: converts from tr.tensor to np.array
+            also remove batch dim 
         '''
-        state_emb = self.input_embed(state_int)
-        h_lstm,c_lstm = self.init_lstm # rnn state
-        outputs = -tr.ones(len(state_emb),self.stsize)
-        # explicit unroll not necessary
-        for tstep in range(len(state_emb)):
-            h_lstm,c_lstm = self.lstm(state_emb[tstep],(h_lstm,c_lstm))
-            outputs[tstep] = h_lstm
-        outputs = self.ff_hid2ulog(outputs)
-        return outputs
+        event = event[:-1] # remove final scene 
+        event = tr.Tensor(event).unsqueeze(1) # include batch dim
+        tsteps,_,obsdim = event.shape
+        # prop
+        h_lstm,c_lstm = self.init_lstm 
+        event_hat = self.in_layer(event)
+        event_hat,(h_lstm,c_lstm) = self.lstm(event_hat,(h_lstm,c_lstm))
+        event_hat = self.out_layer(event_hat)
+        # numpy mode for like
+        if np:
+            event_hat = event_hat.squeeze().detach().numpy()
+        return event_hat
 
+    def backprop(self):
+        self.is_active = True
+        return None
+
+    def calc_loglike_inactive(self,event):
+        """ 
+        - evaluate likelihood of each scene under normal_pdf
+            summing over components (obsdim)
+        - currently evaluating Begin,...,4
+            i.e. leaveing out end
+        """
+        assert self.is_active == False
+        event_loglike = 0
+        for scene in event[:-1]: 
+            normal_pdf = norm(0, self.variance_prior_mode ** 0.5)
+            scene_loglike = normal_pdf.logpdf(scene).sum()
+            event_loglike += scene_loglike
+        return event_loglike
+
+    def calc_loglike(self,event):
+        """ 
+        NB self.sigma is a function of prediction error 
+            and thus changes over time
+        - not fully confident with handling of inactive schema 
+
+        """
+        print('===schema-like',event.shape)
+        ## case: new inactive schema
+        if not self.is_active:
+            print('case new schema')
+            return self.calc_loglike_inactive(event)
+        ## case: reused schema
+        # calculate probability
+        print('case active schema')
+        logprob = 0
+        event_hat = self.forward(event,np=1)
+        event_target = event[1:] # rm END
+        assert event_hat.shape == event_target.shape
+        for scene_target,scene_hat in zip(event_target,event_hat):
+            logprob += self.fast_mvnorm_diagonal_logprob(
+                            scene_target.reshape(-1) - scene_hat.reshape(-1), 
+                        self.Sigma)
+        # prediction error?
+        loglike=None
+        return loglike
 
     def fast_mvnorm_diagonal_logprob(self, x, variances):
         """
@@ -250,23 +183,22 @@ class CSWNet(tr.nn.Module):
             self.Sigma = self.map_variance(self.prediction_errors, self.var_df0, self.var_scale0)
 
 
+
 class SEM(object):
 
     def __init__(self, lmda, alfa, f_opts=None, seed=99, nosplit=False):
         """
         """
         # SEMBase.__init__()
-        # NTF: SEM internal state
         self.seed = seed
         self.nosplit = nosplit
         # params
         self.lmda = lmda
         self.alfa = alfa
         # hopefully do not need obsdim and stsize
-        self.obs_dim = 8
+        self.obsdim = 10
         self.stsize = 25
         self.lr = 0.1
-        
         #
         self.active_schema_idx = 0
         self.prev_schema_idx = None
@@ -277,36 +209,35 @@ class SEM(object):
         """
         self._init_schlib()
         
-
-        None 
+        return None 
 
     def _init_schlib(self):
         self.prior = np.array([self.alfa,self.alfa])
         self.schema_count = np.array([0,0])
         self.schlib = [
-            CSWNet(self.stsize,self.seed),
-            CSWNet(self.stsize,self.seed+101)
+            CSWSchema(self.stsize,self.seed),
+            CSWSchema(self.stsize,self.seed+101)
             ] 
         return None
 
-    def get_crp_prior(self):
+    def get_crp_logprior(self):
         """ 
         - prior calculation relies on the `schema_count`
             which is an array that counts number of times (#obs)
             each schema was used 
         - len(prior) == len(schlib)
         """
-        ## case not previous not new
+        ## init prior
         prior = self.schema_count.copy().astype(float)
-        ## case previous event
-        if self.prev_schema_idx!=None:
+        ## case existing schema
+        if type(self.prev_schema_idx)==int:
             prior[self.prev_schema_idx] += self.lmda
-        else: # tstep0 
+        elif self.prev_schema_idx==None: # tstep0 
             prior[0] = self.alfa
-        ## case new event
+        ## case new schema
         prior[-1] = self.alfa
         assert len(prior) == len(self.schlib)
-        return prior
+        return np.log(prior)
 
     def get_active_schema_idx(self,log_prior,log_like):
         """ 
@@ -322,101 +253,189 @@ class SEM(object):
         return np.argmax(log_post)
 
     def calc_likelihood(self,event):
-        """ calculate likelihood for all schemas 
+        """ wrapper around schema.calc_like
             - active schemas + one inactive schema
         """
-        print('\n\n == AB like')
+        print('==SEM-like')
         event_len = event.shape[0]
         num_schemas = len(self.schlib)
-        log_like = np.zeros((event_len, num_schemas))
+        log_like = -np.ones((num_schemas,event_len))
         for sch_idx in np.arange(num_schemas):
-            log_like[:,sch_idx] = self.calc_likelihood_model(event,sch_idx)
+            schema = self.schlib[sch_idx]
+            log_like[sch_idx] = schema.calc_loglike(event)
+        log_like = np.sum(log_like,axis=1) # collapse tsteps
+        assert len(log_like) == len(self.schlib)
         return log_like
-
-    def calc_likelihood_model(self, event, sch_idx):
-        """ 
-        calculates likelihood of event under model
-        Xp : current observation (target)
-        X  : observation history (input)
-
-        NB: NF calculated logprob for each tstep separately
-            and then summed over tsteps. that would require doing 
-            multiple unrolls of the RNN. 
-            Instead I calcualte model output sequence and sum within here
-        """
-
-        model = self.schlib[sch_idx]
-
-        ## case: new inactive schema
-        if not model.is_trained:
-            return norm(0, self.variance_prior_mode ** 0.5).logpdf(Xp).sum()
-        
-        ## case: reused schema
-        event_hat = model.forward(event)
-
-        # calculate probability
-        logprob = 0
-        for scene,scene_hat in zip(event,event_hat):
-            logprob += self.fast_mvnorm_diagonal_logprob(
-                            scene.reshape(-1) - scene_hat.reshape(-1), 
-                        self.Sigma)
-        return logprob
-
 
     # run functions
 
-    def run_trial(self, event, event_idx=None):
-        """ 
-        todo: change event to event_int
-        given an event, runs a single trial
+    def forward_trial(self, event, event_idx=None):
+        """ process single event
+        - calculate prior
+        - calculate likelihood under each active model
+        - make predictions
         """
-        print('\n**process new event')
+        print('=SEM-forward_trial')
 
         event_len = np.shape(event)[0]
+        print('EL',event_len)
 
         # prior
-        prior = self.get_crp_prior()
-        log_prior = np.log(prior)
-
+        log_prior = self.get_crp_logprior()
         # likelihood
         log_like = self.calc_likelihood(event) # (tsteps,schemas)
-        log_like = np.sum(log_like,axis=0) 
 
         # select model
         self.active_schema_idx = self.get_active_schema_idx(log_prior,log_like)
         self.prev_schema_idx = self.active_schema_idx
 
-        if DEBUG:
-            self.active_schema_idx = event_idx
-        
-        print(
-            'num schemas',len(self.schlib),
-            'schema_idx',self.active_schema_idx
-            )
+        # if DEBUG:
+        #     self.active_schema_idx = event_idx
 
         ## if new active_schema, update schlib
         if self.active_schema_idx == len(self.schema_count)-1:
             # print('new active schema')
             self.schema_count = np.concatenate([self.schema_count,[0]])
-            self.schlib.append(CSWNet(self.stsize,self.seed))
+            self.schlib.append(CSWSchema(self.stsize,self.seed))
         self.schema_count[self.active_schema_idx] += event_len
 
         ### GRADIENT STEP: UPDATE WINNING MODEL WEIGHTS
-      
+        ### GRADIENT STEP: UPDATE WINNING MODEL WEIGHTS
+        active_schema = self.schlib[self.active_schema_idx]
+        active_schema.backprop()
+
         return None
 
-    def run_exp(self, exp, condition,n_train,n_test):
+    def forward_exp(self, exp):
         """
         wrapper for run_trial
         """
         # loop over events
-        
-        exp = generate_experiment(condition,n_train,n_test)
-        
-        for event in events:
-            _ = self.run_trial(event)
+        for event in exp:
+            _ = self.forward_trial(event)
         return None
   
 
+
+
+class CSWTask():
+    """ replicate paper tasks
+    """
+
+    def __init__(self):
+        A1,A2,B1,B2 = self._init_paths()
+        self.paths = [[A1,A2],[B1,B2]]
+        # keep obs dim fixed: NF plate's formula 
+        # calculations assumes 10 
+        self.obsdim = 10
+        self.tsteps = len(self.paths[0][0])
+        return None
+
+    # helper init
+    def _init_paths(self):
+        """ 
+        begin -> locA -> node11, node 21, node 31, end
+        begin -> locA -> node12, node 22, node 32, end
+        begin -> locB -> node11, node 22, node 31, end
+        begin -> locB -> node12, node 21, node 32, end
+        """
+        self.n_obs = 10 
+        begin,locA,locB = 0,1,2
+        node11,node12 = 3,4
+        node21,node22 = 5,6
+        node31,node32 = 7,8
+        end = 9
+        A1 = np.array([begin,locA,
+            node11,node21,node31,end
+            ])
+        A2 = np.array([begin,locA,
+            node12,node22,node32,end
+            ])
+        B1 = np.array([begin,locB,
+            node11,node22,node31,end
+            ])
+        B2 = np.array([begin,locB,
+            node12,node21,node32,end
+            ])
+        return A1,A2,B1,B2
+
+    def _init_emat(self):
+        self.embed_mat = np.random.normal(
+            loc=0., scale=1./np.sqrt(self.obsdim), 
+            size=(self.n_obs, self.obsdim)
+            )
+        return None
+
+    # used to generate exp
+    def get_curriculum(self,condition,n_train,n_test):
+        """ 
+        order of events
+        NB blocked: ntrain needs to be divisible by 4
+        """
+        curriculum = []   
+        if condition == 'blocked':
+            assert n_train%4==0
+            curriculum =  \
+                [0] * (n_train // 4) + \
+                [1] * (n_train // 4) + \
+                [0] * (n_train // 4) + \
+                [1] * (n_train // 4 )
+        elif condition == 'early':
+            curriculum =  \
+                [0] * (n_train // 4) + \
+                [1] * (n_train // 4) + \
+                [0, 1] * (n_train // 4)
+        elif condition == 'middle':
+            curriculum =  \
+                [0, 1] * (n_train // 8) + \
+                [0] * (n_train // 4) + \
+                [1] * (n_train // 4) + \
+                [0, 1] * (n_train // 8)
+        elif condition == 'late':
+            curriculum =  \
+                [0, 1] * (n_train // 4) + \
+                [0] * (n_train // 4) + \
+                [1] * (n_train // 4)
+        elif condition == 'interleaved':
+            curriculum = [0, 1] * (n_train // 2)
+        elif condition == 'single': ## DEBUG
+            curriculum =  \
+                [0] * (n_train) 
+        else:
+            print('condition not properly specified')
+            assert False
+        # 
+        curriculum += [int(np.random.rand() < 0.5) for _ in range(n_test)]
+        return np.array(curriculum)
+
+    def embed_path(self,path_int):
+        """ 
+        given exp_int (tsteps)
+        returns exp (ntrials,tsteps,obsdim)
+        """
+        return self.embed_mat[path_int]
+
+    # main wrapper
+    def generate_experiment(self,condition,n_train,n_test):
+        """ 
+        exp arr of events (vec)
+        returns [n_train+n_test,tsteps,obsdim]
+        """
+        self._init_emat()
+        # print(self.transitions[0])
+        n_trials = n_train+n_test
+        curr = self.get_curriculum(condition,n_train,n_test)
+        # transition matrices
+        exp = -np.ones([n_trials,self.tsteps,self.obsdim])
+        for trial_idx in range(n_train+n_test):
+            # select A1,A2,B1,B2
+            event_type = curr[trial_idx]
+            path_type = np.random.randint(2)
+            path_int = self.paths[event_type][path_type]
+            # embed
+            exp[trial_idx] = self.embed_path(path_int)
+        return exp
+
+  
 
 softmax = lambda ulog: tr.softmax(ulog,-1)

@@ -21,6 +21,7 @@ notes:
         - goal find dynamic range
         - caution/study "sem variance" problem
 
+where do i handle embedding?
 """
 
 
@@ -30,31 +31,60 @@ class CSWTask():
     """ replicate paper tasks
     """
 
-    def __init__(self,graph_pr):
+    def __init__(self):
         # initialize transition {0:TA,1:TB}
         # contains transition matrix A, and B
-        self.transitions = self._init_transition_matrix()
+        self.transitions = self.init_transition_matrix()
+        self.obsdim = 10
+        self.tsteps = 5
         #
         #
         #
         return None
 
     def generate_trial(self,trial_idx,condition):
-        """ 
+        """ might not be needed
+
         """
         return None
 
+    ## fix exp sampling
     def generate_experiment(self,condition,n_train,n_test):
         """ 
         exp arr of events (vec)
+        returns [n_train+n_test,tsteps,obsdim]
         """
+        # print(self.transitions[0])
+
+        curr = self.get_curriculum(condition,n_train,n_test)
+        # transition matrices
+        exp_int = -np.ones([n_train+n_test,self.tsteps])
+        for trial_idx in range(n_train+n_test):
+            print('trial',trial_idx)
+            event_type = curr[trial_idx]
+            tmat = transition_matrix = self.transitions[event_type]
+            print('tmat',tmat)
+            scene = 0
+            while scene < 7:
+                print('--',scene)
+                print(tmat[scene, :])
+                scene = np.arange(9)[
+                    np.sum(np.cumsum(tmat[scene, :]) < np.random.uniform(0, 1))
+                    ]
+                
+        exp = None
 
         return exp
 
-    def _get_list_transitions(self,condition,n_train=10,n_test=2):
-        # generate the order of the events
+    def get_curriculum(self,condition,n_train,n_test):
+        """ 
+        order of events
+        NB blocked: ntrain needs to be divisible by 4
+        """
+    
         list_transitions = []   
         if condition == 'blocked':
+            assert n_train%4==0
             list_transitions =  \
                 [0] * (n_train // 4) + \
                 [1] * (n_train // 4) + \
@@ -84,10 +114,12 @@ class CSWTask():
         else:
             print('condition not properly specified')
             assert False
+        # 
         list_transitions += [int(np.random.rand() < 0.5) for _ in range(n_test)]
-        return list_transitions
+        print(321,len(list_transitions))
+        return np.array(list_transitions)
 
-    def _init_transition_matrix(self):
+    def init_transition_matrix(self):
         transition_probs_b = {
             (0, 1): 1.0, 
             (1, 3): 0.5, (1, 4): 0.5, 
@@ -108,7 +140,7 @@ class CSWTask():
 
         def make_t_matrix(transition_prob_dict):
             # transition matrix
-            t = np.zeros((10, 10))
+            t = np.zeros((10, 10)).astype(int)
             for (x, y), p in transition_prob_dict.items():
                 t[x, y] = p
             return t
@@ -118,8 +150,6 @@ class CSWTask():
             1: make_t_matrix(transition_probs_c)
         }
         return transitions
-
-
 
 
 class CSWNet(tr.nn.Module):
@@ -220,12 +250,9 @@ class CSWNet(tr.nn.Module):
             self.Sigma = self.map_variance(self.prediction_errors, self.var_df0, self.var_scale0)
 
 
-""" 
-"""
-
 class SEM(object):
 
-    def __init__(self, lmda=1., alfa=10.0, f_opts=None, seed=99, nosplit=False):
+    def __init__(self, lmda, alfa, f_opts=None, seed=99, nosplit=False):
         """
         """
         # SEMBase.__init__()
@@ -378,17 +405,18 @@ class SEM(object):
       
         return None
 
-    def run_exp(self, events):
+    def run_exp(self, exp, condition,n_train,n_test):
         """
         wrapper for run_trial
         """
         # loop over events
+        
+        exp = generate_experiment(condition,n_train,n_test)
+        
         for event in events:
             _ = self.run_trial(event)
         return None
   
-
-
 
 
 softmax = lambda ulog: tr.softmax(ulog,-1)

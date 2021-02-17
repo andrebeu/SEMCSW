@@ -47,7 +47,7 @@ class CSWSchema(tr.nn.Module):
         self.variance_prior_mode = 1/self.obsdim
         self.var_df0 = 1
         self.var_scale0 = 0.3
-        # self.var_scale0 = get_prior_scale(self.var_df0, variance_prior_mode)
+        self.sigma = np.ones(self.obsdim)/self.obsdim
 
         return None
 
@@ -85,6 +85,7 @@ class CSWSchema(tr.nn.Module):
         self.is_active = True
         return None
 
+
     def calc_loglike_inactive(self,event):
         """ 
         - evaluate likelihood of each scene under normal_pdf
@@ -108,6 +109,7 @@ class CSWSchema(tr.nn.Module):
 
         """
         print('===schema-like',event.shape)
+        print('sig',self.sigma)
         ## case: new inactive schema
         if not self.is_active:
             print('case new schema')
@@ -122,10 +124,11 @@ class CSWSchema(tr.nn.Module):
         for scene_target,scene_hat in zip(event_target,event_hat):
             logprob += self.fast_mvnorm_diagonal_logprob(
                             scene_target.reshape(-1) - scene_hat.reshape(-1), 
-                        self.Sigma)
+                        self.sigma)
         # prediction error?
         loglike=None
         return loglike
+
 
     def fast_mvnorm_diagonal_logprob(self, x, variances):
         """
@@ -178,9 +181,10 @@ class CSWSchema(tr.nn.Module):
         mode = (nu0 * var0 + n * v) / (nu0 + n + 2)
         return mode
 
-    def _update_variance(self):
-        if np.shape(self.prediction_errors)[0] > 1:
-            self.Sigma = self.map_variance(self.prediction_errors, self.var_df0, self.var_scale0)
+    def update_variance(self,prediction_errors):
+        self.sigma = self.map_variance(prediction_errors, 
+                        self.var_df0, self.var_scale0)
+
 
 
 
@@ -303,6 +307,10 @@ class SEM(object):
         ### GRADIENT STEP: UPDATE WINNING MODEL WEIGHTS
         active_schema = self.schlib[self.active_schema_idx]
         active_schema.backprop()
+        event_hat = active_schema.forward(event,np=1)
+        event_target = event[1:]
+        prediction_error = event_hat - event_target
+        active_schema.update_variance(prediction_error)
 
         return None
 
@@ -312,6 +320,7 @@ class SEM(object):
         """
         # loop over events
         for event in exp:
+            print()
             _ = self.forward_trial(event)
         return None
   

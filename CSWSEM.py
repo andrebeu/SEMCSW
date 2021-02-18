@@ -24,6 +24,7 @@ event_target (len5): Lt,...,Et
 """
 
 
+
 class CSWSchema(tr.nn.Module):
 
     def __init__(self,stsize,seed,learn_rate):
@@ -101,7 +102,7 @@ class CSWSchema(tr.nn.Module):
         self.optiop.step()
         self.is_active = True
         # update variance
-        return loss
+        return loss.detach().numpy()
 
 
     def calc_loglike_inactive(self,event):
@@ -203,6 +204,20 @@ class CSWSchema(tr.nn.Module):
 
 
 
+class SEMData(object):
+    def __init__(self):
+        self.exp_data = []
+        return None
+
+    def record(self,key,value):
+        self.trial_data[key] = value
+
+    def new_trial(self,trial_num):
+        self.trial_data = {'trial':trial_num}
+        self.exp_data.append(self.trial_data)
+        
+
+
 
 class SEM(object):
 
@@ -228,7 +243,7 @@ class SEM(object):
          will be len(schlib) == 1+num_active_schemas
         """
         self._init_schlib()
-        
+        self.data = SEMData()
         return None 
 
     def _init_schlib(self):
@@ -294,16 +309,19 @@ class SEM(object):
         - calculate likelihood under each active model
         - make predictions
         """
-        print('-SEM_forward_trial')
 
         # prior & likelihood
         log_prior = self.get_crp_logprior()
+        self.data.record('prior',log_prior)
         log_like = self.calc_likelihood(event) # (tsteps,schemas)
+        self.data.record('like',log_like)
+
         # select model
         self.active_schema_idx = self.get_active_schema_idx(log_prior,log_like)
         self.prev_schema_idx = self.active_schema_idx
+        self.data.record('active_schema',self.active_schema_idx)
 
-        ## if new active_schema, update schlib (package)
+        ## if new active_schema, update schlib (need to wrap this)
         if self.active_schema_idx == len(self.schema_count)-1:
             # print('new active schema')
             self.schema_count = np.concatenate([self.schema_count,[0]])
@@ -313,8 +331,8 @@ class SEM(object):
         ### GRADIENT STEP: UPDATE WINNING MODEL WEIGHTS
         active_schema = self.schlib[self.active_schema_idx]
         loss = active_schema.backprop(event)
-        print(loss)
-        return loss
+        self.data.record('loss',loss)
+        return None
 
     def forward_exp(self, exp):
         """
@@ -322,10 +340,10 @@ class SEM(object):
         """
         # loop over events
         lossL = []
-        for event in exp:
-            loss_tr = self.forward_trial(event)
-            lossL.append(loss_tr)
-        return lossL
+        for trial_num,event in enumerate(exp):
+            self.data.new_trial(trial_num)
+            self.forward_trial(event)
+        return self.data.exp_data
   
 
 

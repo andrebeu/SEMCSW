@@ -296,23 +296,20 @@ class SEM(object):
         """
         print('-SEM_forward_trial')
 
-        # prior
+        # prior & likelihood
         log_prior = self.get_crp_logprior()
-        # likelihood
         log_like = self.calc_likelihood(event) # (tsteps,schemas)
-
         # select model
         self.active_schema_idx = self.get_active_schema_idx(log_prior,log_like)
         self.prev_schema_idx = self.active_schema_idx
 
-        ## if new active_schema, update schlib
+        ## if new active_schema, update schlib (package)
         if self.active_schema_idx == len(self.schema_count)-1:
             # print('new active schema')
             self.schema_count = np.concatenate([self.schema_count,[0]])
             self.schlib.append(CSWSchema(self.stsize,self.seed,self.learn_rate))
         self.schema_count[self.active_schema_idx] += len(event)
 
-        ### GRADIENT STEP: UPDATE WINNING MODEL WEIGHTS
         ### GRADIENT STEP: UPDATE WINNING MODEL WEIGHTS
         active_schema = self.schlib[self.active_schema_idx]
         loss = active_schema.backprop(event)

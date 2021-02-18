@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#SBATCH -t 24:00:00   # runs for 48 hours (max)  
+#SBATCH -t 4:00:00   # runs for 48 hours (max)  
 #SBATCH -N 1         # node count 
 #SBATCH -c 1         # number of cores 
 #SBATCH --mem 3000

@@ -217,11 +217,7 @@ class SEMData(object):
 
     def new_trial(self,trial_num):
         self.trial_data = {'trial':trial_num}
-        self.exp_data.append(self.trial_data)
-        
-    def finalize(self):
-        self.broadcast_params()
-        return self.exp_data
+        self.exp_data.append(self.trial_data) 
 
     def broadcast_params(self):
         """ update each dict in exp_data
@@ -231,6 +227,11 @@ class SEMData(object):
         for d in self.exp_data:
             d.update(params)
         return None
+
+    def finalize(self):
+        self.broadcast_params()
+        return self.exp_data
+
 
 
 class SEM(object):

@@ -6,8 +6,6 @@ import torch as tr
 # PDF normal continuous random varaible
 from scipy.stats import norm
 
-DEBUG = True
-
 
 """ 
 notes: 
@@ -23,6 +21,8 @@ event_hat (len5): Lh,2h,3h,4h,Eh
 event_target (len5): Lt,...,Et
 """
 
+## common across all objects
+OBSDIM = 10
 
 
 class CSWSchema(tr.nn.Module):
@@ -31,7 +31,7 @@ class CSWSchema(tr.nn.Module):
         super().__init__()
         ## network parameters
         self.stsize = stsize
-        self.obsdim = 10
+        self.obsdim = OBSDIM
         self.learn_rate = learn_rate
         # setup
         self.seed = seed
@@ -61,7 +61,8 @@ class CSWSchema(tr.nn.Module):
         self.out_layer = tr.nn.Linear(self.stsize,self.obsdim)
         return None
 
-    def forward(self,event,np=False):
+
+    def forward(self,event,np):
         ''' main wrapper 
         takes event, returns event_hat
         event is [tsteps,scene_dim]
@@ -86,7 +87,7 @@ class CSWSchema(tr.nn.Module):
         """ update weights and 
         compute prediction errors
         """
-        event_hat = self.forward(event)
+        event_hat = self.forward(event,np=0)
         event_target = tr.Tensor(event[1:]).unsqueeze(1) 
         ## update variance
         self.update_variance(event_hat,event_target)
@@ -205,7 +206,9 @@ class CSWSchema(tr.nn.Module):
 
 
 class SEMData(object):
-    def __init__(self):
+
+    def __init__(self, params):
+        self.params = params
         self.exp_data = []
         return None
 
@@ -216,12 +219,23 @@ class SEMData(object):
         self.trial_data = {'trial':trial_num}
         self.exp_data.append(self.trial_data)
         
+    def finalize(self):
+        self.broadcast_params()
+        return self.exp_data
 
+    def broadcast_params(self):
+        """ update each dict in exp_data
+        to include sem params
+        """
+        params = {k:v for k,v in self.params.items() if k!='self'}
+        for d in self.exp_data:
+            d.update(params)
+        return None
 
 
 class SEM(object):
 
-    def __init__(self, lmda, alfa, f_opts=None, seed=99, learn_rate=0.05,nosplit=False):
+    def __init__(self, nosplit, stsize, learn_rate, lmda, alfa, seed):
         """
         """
         # SEMBase.__init__()
@@ -231,19 +245,20 @@ class SEM(object):
         self.lmda = lmda
         self.alfa = alfa
         # hopefully do not need obsdim and stsize
-        self.obsdim = 10
-        self.stsize = 25
+        self.obsdim = OBSDIM
+        self.stsize = stsize
         self.learn_rate = learn_rate
-        #
-        self.active_schema_idx = 0
-        self.prev_schema_idx = None
+        # collect sem data; locals() returns kwargs dict
+        self.data = SEMData(locals())
         """
         schlib always has one "inactive" schema  
          similarly, dimensions of prior,likelihood,posterior
          will be len(schlib) == 1+num_active_schemas
         """
+        self.active_schema_idx = 0
+        self.prev_schema_idx = None
         self._init_schlib()
-        self.data = SEMData()
+        
         return None 
 
     def _init_schlib(self):
@@ -301,35 +316,38 @@ class SEM(object):
         assert len(log_like) == len(self.schlib)
         return log_like
 
-    # run functions
-
-    def forward_trial(self, event, event_idx=None):
-        """ process single event
-        - calculate prior
-        - calculate likelihood under each active model
-        - make predictions
+    def select_schema(self,log_prior,log_like):
+        """ returns index of active schema
+        updates previous_schema_index
+        if new schema, append to library
         """
+        # select model
+        active_schema_idx = self.get_active_schema_idx(log_prior,log_like)
+        # update previous schema index
+        self.prev_schema_idx = active_schema_idx
+        # if new active_schema, update schlib (need to wrap this)
+        if active_schema_idx == len(self.schema_count)-1:
+            self.schema_count = np.concatenate([self.schema_count,[0]])
+            self.schlib.append(CSWSchema(self.stsize,self.seed,self.learn_rate))
+        return active_schema_idx
 
+    # run functions
+    def forward_trial(self, event):
+        """ 
+        wrapper for within trial calculations 
+        records trial data
+        """
         # prior & likelihood
         log_prior = self.get_crp_logprior()
         self.data.record('prior',log_prior)
         log_like = self.calc_likelihood(event) # (tsteps,schemas)
         self.data.record('like',log_like)
-
-        # select model
-        self.active_schema_idx = self.get_active_schema_idx(log_prior,log_like)
-        self.prev_schema_idx = self.active_schema_idx
-        self.data.record('active_schema',self.active_schema_idx)
-
-        ## if new active_schema, update schlib (need to wrap this)
-        if self.active_schema_idx == len(self.schema_count)-1:
-            # print('new active schema')
-            self.schema_count = np.concatenate([self.schema_count,[0]])
-            self.schlib.append(CSWSchema(self.stsize,self.seed,self.learn_rate))
-        self.schema_count[self.active_schema_idx] += len(event)
-
-        ### GRADIENT STEP: UPDATE WINNING MODEL WEIGHTS
-        active_schema = self.schlib[self.active_schema_idx]
+        # select schema and update count
+        active_schema_idx =self.select_schema(log_prior,log_like)
+        self.schema_count[active_schema_idx] += len(event)
+        active_schema = self.schlib[active_schema_idx]
+        self.data.record('active_schema',active_schema_idx)
+        # gradient step
         loss = active_schema.backprop(event)
         self.data.record('loss',loss)
         return None
@@ -343,7 +361,9 @@ class SEM(object):
         for trial_num,event in enumerate(exp):
             self.data.new_trial(trial_num)
             self.forward_trial(event)
-        return self.data.exp_data
+        # include sem params 
+        exp_data = self.data.finalize()
+        return exp_data
   
 
 
@@ -357,7 +377,7 @@ class CSWTask():
         self.paths = [[A1,A2],[B1,B2]]
         # keep obs dim fixed: NF plate's formula 
         # calculations assumes 10 
-        self.obsdim = 10
+        self.obsdim = OBSDIM
         self.tsteps = len(self.paths[0][0])
         return None
 
@@ -466,6 +486,5 @@ class CSWTask():
             exp[trial_idx] = self.embed_path(path_int)
         return exp
 
-  
 
-softmax = lambda ulog: tr.softmax(ulog,-1)
+

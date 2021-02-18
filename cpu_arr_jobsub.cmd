@@ -15,8 +15,8 @@ nosplit=${1}
 condition=${2}
 learn_rate=${3}
 
-alfa=1
-lmda=1
+alfa=${4}
+lmda=${5}
 
 seed=${SLURM_ARRAY_TASK_ID}
 

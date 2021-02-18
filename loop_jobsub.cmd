@@ -6,8 +6,8 @@
 
 declare -a learn_rate_arr=(0.005 0.01 0.05 0.1)
 declare -a condition_arr=("blocked" "interleaved")
-# declare -a alfa_arr=(-32 -16 -8 -4 -2 0 2 4 8 16 32)
-# declare -a lmbda_arr=(-32 -16 -8 -4 -2 0 2 4 8 16 32)
+declare -a alfa_arr=(0 0.001 0.01 0.1 1 10 100)
+declare -a lmda_arr=(0 0.001 0.01 0.1 1 10 100)
 
 ## slurm array idx passed to py script: 
 # builds product of params
@@ -15,11 +15,15 @@ declare -a condition_arr=("blocked" "interleaved")
 # returns str param set
 
 
-# sbatch --array=0-100 cpu_arr_jobsub.cmd arg arg
-
 for learn_rate in "${learn_rate_arr[@]}"; do
-  for condition in "${condition_arr[@]}"; do
+  for learn_rate in "${learn_rate_arr[@]}"; do
     # LSTM
-    sbatch --array=0-100 cpu_arr_jobsub.cmd "1" "${condition}" "${learn_rate}"
+    sbatch --array=0-100 cpu_arr_jobsub.cmd "1" "${condition}" "${learn_rate}" "0" "0"
+    for alfa in "${alfa_arr[@]}"; do
+      for lmda in "${lmda_arr[@]}"; do
+        # SEM
+        sbatch --array=0-100 cpu_arr_jobsub.cmd "0" "${condition}" "${learn_rate}" "${alfa}" "${lmda}" 
+      done
+    done
   done
 done

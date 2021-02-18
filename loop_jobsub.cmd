@@ -6,8 +6,8 @@
 
 declare -a learn_rate_arr=(0.005 0.01 0.05 0.1)
 declare -a condition_arr=("blocked" "interleaved")
-declare -a alfa_arr=(0 0.001 0.01 0.1 1 10 100)
-declare -a lmda_arr=(0 0.001 0.01 0.1 1 10 100)
+declare -a alfa_arr=(0.1 1 10)
+declare -a lmda_arr=(0.1 1 10)
 
 ## slurm array idx passed to py script: 
 # builds product of params

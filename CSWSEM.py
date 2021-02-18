@@ -36,6 +36,7 @@ class CSWSchema(tr.nn.Module):
         # setup
         self.seed = seed
         tr.manual_seed(seed)
+        np.random.seed(seed)
         self._build()
         # backprop
         self.lossop = tr.nn.MSELoss()

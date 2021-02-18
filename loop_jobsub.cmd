@@ -16,7 +16,7 @@ declare -a lmda_arr=(0 0.001 0.01 0.1 1 10 100)
 
 
 for learn_rate in "${learn_rate_arr[@]}"; do
-  for learn_rate in "${learn_rate_arr[@]}"; do
+  for condition in "${condition_arr[@]}"; do
     # LSTM
     sbatch --array=0-100 cpu_arr_jobsub.cmd "1" "${condition}" "${learn_rate}" "0" "0"
     for alfa in "${alfa_arr[@]}"; do

@@ -1,1 +1,1 @@
-rsync -r -vam abeukers@scotty.princeton.edu:/jukebox/norman/abeukers/sem/SchemaPrediction_internal/gsdata/* /Users/abeukers/wd/csw/SchemaPrediction_internal/gsdata
+rsync -r -vam -P abeukers@scotty.princeton.edu:/jukebox/norman/abeukers/sem/SchemaPrediction_internal/gsdata/sem1/* /Users/abeukers/wd/csw/SchemaPrediction_internal/gsdata/sem1

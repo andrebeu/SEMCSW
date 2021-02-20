@@ -11,6 +11,4 @@
 - Evaluate on early/middle/late
 
 
-
-
-
+** MOVING TO DIFFERENT FOLDER: when switching between AB and NF repos, github sometimes bugs out with finder: new files wont load. 

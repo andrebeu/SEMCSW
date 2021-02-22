@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 
 from CSWSEM import *
 
-def make_gsdf(gsname,save=True):
+def make_gsdf(gsname,save=False):
   gs_dir = "gsdata/%s/"%gsname
   fpathL = glob(gs_dir+'*')
   seed_df_L = []

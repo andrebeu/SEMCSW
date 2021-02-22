@@ -1,3 +1,10 @@
+# gs-absem notes
+- first gridsearch with AB implementation of SEM
+- unscaled alfa/lmda (i.e. not in log scale)
+- does not record trial type information (needed at test) to calculate adjrand score
+- main result: learning rate needs to be at least 0.05 to fit first learning block
+
+
 # Model of Curriculum Effect on Schema Learning
 
 ## Results

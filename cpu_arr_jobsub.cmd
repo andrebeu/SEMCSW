@@ -11,17 +11,20 @@
 conda init bash
 conda activate sem
 
-nosplit=${1}
-condition=${2}
-learn_rate=${3}
+# nosplit=${1}
+# condition=${2}
+# learn_rate=${3}
 
-alfa=${4}
-lmda=${5}
+# alfa=${4}
+# lmda=${5}
 
 seed=${SLURM_ARRAY_TASK_ID}
 
+param_str=`python get_param_jobsub.py ${slurm_arr_idx}`
+echo ${param_str}
+
 # submit job
-srun python PY-sem_seed_exp.py "${nosplit}" "${condition}" "${learn_rate}" "${alfa}" "${lmda}" "${seed}"
+srun python PY-sem_batch_exp.py "${param_str}"
 
 sacct --format="CPUTime,MaxRSS"
 

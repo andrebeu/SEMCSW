@@ -8,14 +8,15 @@ given an index, return parameter string
 
 param_set_idx = int(sys.argv[1])
 
-lr = [0.001, 0.005, 0.01]
-ep =[2, 4, 8, 16, 32]
-alfa =[-32, -16, -8, -4, -2, 0, 2, 4, 8, 16, 32]
-lmbda =[-32, -16, -8, -4, -2, 0, 2, 4, 8, 16, 32]
+lr = [0.01, 0.05, 0.1]
+alfa =[0.01, 0.1, 1, 10, 100, 1000, 10000, 100000]
+lmbda =[0.01, 0.1, 1, 10, 100, 1000, 10000, 100000]
 
-for idx,(i,j,k,l) in enumerate(itertools.product(ep,lr,alfa,lmbda)):
+itrprod = itertools.product(lr,alfa,lmbda)
+
+for idx,paramL in enumerate(itrprod):
   if idx == param_set_idx:
-    print(i,j,k,l)
+    print(" ".join([str(i) for i in paramL]))
     break
 
 

@@ -1,6 +1,9 @@
 # gs2 notes
 - recording curriculum repeatedly on every trial 
   - not ideal; limitation of SEMData object
+- change to gridsearch procedure 
+  - single job contains multiple seeds
+  - parameter passing controlled `get_param_jobsub.py`
 
 # procedural notes
 - NB-run_sem.pynb used for debugging and testing before launching gridsearch

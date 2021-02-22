@@ -223,7 +223,10 @@ class SEMData(object):
         self.sem_data.append(self.trial_data) 
 
     def record_trial(self,key,value):
-        """ populate trial dict """
+        """ populate trial dict 
+        NB** trial_data is a dict that has already been 
+        appended to sem_data. this method modifies self.trial_data 
+        """
         self.trial_data[key] = value
 
     def record_exp(self,key,value):
@@ -503,7 +506,7 @@ class CSWTask():
             path_int = self.paths[event_type][path_type]
             # embed
             exp[trial_idx] = self.embed_path(path_int)
-        return exp
+        return exp,curr
 
 
 

@@ -1,8 +1,6 @@
-# gs-absem notes
-- first gridsearch with AB implementation of SEM
-- unscaled alfa/lmda (i.e. not in log scale)
-- does not record trial type information (needed at test) to calculate adjrand score
-- main result: learning rate needs to be at least 0.05 to fit first learning block
+# gs2 notes
+- recording curriculum repeatedly on every trial 
+  - not ideal; limitation of SEMData object
 
 # procedural notes
 - NB-run_sem.pynb used for debugging and testing before launching gridsearch

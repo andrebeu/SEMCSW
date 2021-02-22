@@ -15,6 +15,8 @@ lmda = float(sys.argv[5])
 seed = int(sys.argv[6])
 stsize = 25
 
+np.random.seed(seed)
+tr.manual_seed(0)
 
 ## gridsearch tag
 gs_name = 'gs2'

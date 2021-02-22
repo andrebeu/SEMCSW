@@ -1,4 +1,4 @@
-
+import time
 import os
 import numpy as np
 import torch as tr
@@ -208,30 +208,42 @@ class CSWSchema(tr.nn.Module):
 
 class SEMData(object):
 
-    def __init__(self, params):
-        self.params = params
-        self.exp_data = []
+    def __init__(self, semparams):
+        self.semparams = semparams
+        self.sem_data = []
         return None
 
-    def record(self,key,value):
+    def new_trial(self,trial_num):
+        """ 
+        init dict containing trial data 
+        NB** trial_data is first appended to sem_data
+            and is then modified at runtime.
+        """
+        self.trial_data = {'trial':trial_num}
+        self.sem_data.append(self.trial_data) 
+
+    def record_trial(self,key,value):
+        """ populate trial dict """
         self.trial_data[key] = value
 
-    def new_trial(self,trial_num):
-        self.trial_data = {'trial':trial_num}
-        self.exp_data.append(self.trial_data) 
+    def record_exp(self,key,value):
+        """ record experiment wide keyvalue in sem_data """
+        for trial_dict in self.sem_data:
+            trial_dict.update({key:value})
+        return None
 
-    def broadcast_params(self):
-        """ update each dict in exp_data
-        to include sem params
+    def record_semparams(self):
+        """ update each dict in sem_data
+        to include sem semparams
         """
-        params = {k:v for k,v in self.params.items() if k!='self'}
-        for d in self.exp_data:
-            d.update(params)
+        semparams = {k:v for k,v in self.semparams.items() if k!='self'}
+        for trial_dict in self.sem_data:
+            trial_dict.update(semparams)
         return None
 
     def finalize(self):
-        self.broadcast_params()
-        return self.exp_data
+        self.record_semparams()
+        return self.sem_data
 
 
 
@@ -341,29 +353,34 @@ class SEM(object):
         """
         # prior & likelihood
         log_prior = self.get_crp_logprior()
-        self.data.record('prior',log_prior)
+        self.data.record_trial('prior',log_prior)
         log_like = self.calc_likelihood(event) # (tsteps,schemas)
-        self.data.record('like',log_like)
+        self.data.record_trial('like',log_like)
         # select schema and update count
         active_schema_idx =self.select_schema(log_prior,log_like)
         self.schema_count[active_schema_idx] += len(event)
         active_schema = self.schlib[active_schema_idx]
-        self.data.record('active_schema',active_schema_idx)
+        self.data.record_trial('active_schema',active_schema_idx)
         # gradient step
         loss = active_schema.backprop(event)
-        self.data.record('loss',loss)
+        self.data.record_trial('loss',loss)
         return None
 
     def forward_exp(self, exp):
         """
         wrapper for run_trial
         """
+        exp_start_time = time.time()
         # loop over events
         lossL = []
         for trial_num,event in enumerate(exp):
             self.data.new_trial(trial_num)
             self.forward_trial(event)
-        # include sem params 
+        # exp recording sem params 
+        exp_end_time = time.time()
+        self.data.record_exp('delta_time',
+            exp_end_time - exp_start_time)
+        # close data
         exp_data = self.data.finalize()
         return exp_data
   

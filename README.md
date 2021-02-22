@@ -4,6 +4,12 @@
 - does not record trial type information (needed at test) to calculate adjrand score
 - main result: learning rate needs to be at least 0.05 to fit first learning block
 
+# procedural notes
+- NB-run_sem.pynb used for debugging and testing before launching gridsearch
+  - code in here should be kept in a state that is amenable to gridsearching
+
+
+
 
 # Model of Curriculum Effect on Schema Learning
 

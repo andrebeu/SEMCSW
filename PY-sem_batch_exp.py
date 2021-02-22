@@ -60,10 +60,11 @@ for nosplit,condition,seed in itertools.product([0,1],condL,seedL):
     sem.data.record_exp('curriculum',curr)
 
     # save
-    # save_fpath = 'gsdata/%s/%s'%(gs_name,model_tag)
-    # sem_data_df = pd.DataFrame(sem_data)
-    # sem_data_df.to_csv(save_fpath) # just in case
+    sem_data_df = pd.DataFrame(sem_data)
     dfL.append(sem_data_df)
+    # save_fpath = 'gsdata/%s/%s'%(gs_name,model_tag)
+    # sem_data_df.to_csv(save_fpath) # just in case
+    
 
 ## save again: prefer this
 batch_tag = 'batch-learnrate_%.3f__alfa_%f__lmbda_%f'%(learn_rate,alfa,lmda)

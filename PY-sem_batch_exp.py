@@ -49,15 +49,18 @@ for nosplit,condition,seed in itertools.product([0,1],condL,seedL):
     }
 
     # setup
+    exp_start_time = time.time()
     task = CSWTask()
     sem = SEM(**sem_kwargs)
 
     # run
     exp,curr = task.generate_experiment(**exp_kwargs)
-    sem_data = sem.forward_exp(exp)
+    sem_data = sem.forward_exp(exp,curr)
 
     # record curriculum (not ideal, recording with every obs)
-    sem.data.record_exp('curriculum',curr)
+    sem.data.record_exp('condition',condition)
+    exp_end_time = time.time()
+    sem.data.record_exp('delta_time',exp_end_time-exp_start_time)
 
     # save
     sem_data_df = pd.DataFrame(sem_data)

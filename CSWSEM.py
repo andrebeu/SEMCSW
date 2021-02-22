@@ -369,20 +369,17 @@ class SEM(object):
         self.data.record_trial('loss',loss)
         return None
 
-    def forward_exp(self, exp):
+    def forward_exp(self,exp,curr):
         """
         wrapper for run_trial
         """
-        exp_start_time = time.time()
         # loop over events
         lossL = []
         for trial_num,event in enumerate(exp):
             self.data.new_trial(trial_num)
+            self.data.record_trial('curriculum',curr[trial_num])
             self.forward_trial(event)
         # exp recording sem params 
-        exp_end_time = time.time()
-        self.data.record_exp('delta_time',
-            exp_end_time - exp_start_time)
         # close data
         exp_data = self.data.finalize()
         return exp_data

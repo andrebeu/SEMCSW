@@ -18,7 +18,7 @@ conda activate sem
 # alfa=${4}
 # lmda=${5}
 
-seed=${SLURM_ARRAY_TASK_ID}
+slurm_arr_idx=${SLURM_ARRAY_TASK_ID}
 
 param_str=`python get_param_jobsub.py ${slurm_arr_idx}`
 echo ${param_str}

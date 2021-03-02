@@ -483,7 +483,7 @@ class CSWTask():
         returns [n_train+n_test,tsteps,obsdim]
         """
         self._init_emat()
-        # form curriculum
+        # get curriculum
         n_trials = n_train+n_test
         curr = self.get_curriculum(condition,n_train,n_test)
         # generate trials

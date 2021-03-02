@@ -390,6 +390,7 @@ class CSWTask():
         # calculations assumes 10 
         self.obsdim = OBSDIM
         self.tsteps = len(self.paths[0][0])
+        self.exp_int = None
         return None
 
     # helper init

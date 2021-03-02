@@ -355,6 +355,8 @@ class SEM(object):
         active_schema = self.schlib[active_schema_idx]
         self.data.record_trial('active_schema',active_schema_idx)
         # gradient step
+        event_hat = active_schema.forward(event,np=1)
+        self.data.record_trial('event_hat',event_hat)
         loss = active_schema.backprop(event)
         self.data.record_trial('loss',loss)
         return None
@@ -398,7 +400,6 @@ class CSWTask():
         begin -> locB -> node11, node 22, node 31, end
         begin -> locB -> node12, node 21, node 32, end
         """
-        self.n_obs = 10 
         begin,locA,locB = 0,1,2
         node11,node12 = 3,4
         node21,node22 = 5,6
@@ -419,6 +420,7 @@ class CSWTask():
         return A1,A2,B1,B2
 
     def _init_emat(self):
+        self.n_obs = 11
         self.embed_mat = np.random.normal(
             loc=0., scale=1./np.sqrt(self.obsdim), 
             size=(self.n_obs, self.obsdim)
@@ -481,17 +483,19 @@ class CSWTask():
         returns [n_train+n_test,tsteps,obsdim]
         """
         self._init_emat()
-        # print(self.transitions[0])
+        # form curriculum
         n_trials = n_train+n_test
         curr = self.get_curriculum(condition,n_train,n_test)
-        # transition matrices
+        # generate trials
         exp = -np.ones([n_trials,self.tsteps,self.obsdim])
+        self.exp_int = -np.ones([n_trials,self.tsteps],dtype=int)
         for trial_idx in range(n_train+n_test):
             # select A1,A2,B1,B2
             event_type = curr[trial_idx]
             path_type = np.random.randint(2)
             path_int = self.paths[event_type][path_type]
             # embed
+            self.exp_int[trial_idx] = path_int
             exp[trial_idx] = self.embed_path(path_int)
         return exp,curr
 

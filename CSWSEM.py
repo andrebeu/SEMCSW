@@ -7,15 +7,7 @@ import torch as tr
 from scipy.stats import norm
 
 
-""" 
-notes: 
-- implement conceptual replication
-    - only diff is LSTM training procedure
-- run sem vs lstm
-    - small gridsearch 
-        - goal find dynamic range
-        - caution/study "sem variance" problem
-
+"""
 event (len6): B,L,2,3,4,E
 event_hat (len5): Lh,2h,3h,4h,Eh
 event_target (len5): Lt,...,Et
@@ -111,7 +103,7 @@ class CSWSchema(tr.nn.Module):
         """ 
         - evaluate likelihood of each scene under normal_pdf
             summing over components (obsdim)
-        - currently evaluating Begin,...,4
+        - NB currently evaluating Begin,...,4
             i.e. leaveing out end
         """
         assert self.is_active == False
@@ -127,7 +119,6 @@ class CSWSchema(tr.nn.Module):
         NB self.sigma is a function of prediction error 
             and thus changes over time
         - not fully confident with handling of inactive schema 
-
         """
         ## case: new inactive schema
         if not self.is_active:
@@ -275,7 +266,6 @@ class SEM(object):
         self.active_schema_idx = 0
         self.prev_schema_idx = None
         self._init_schlib()
-        
         return None 
 
     def _init_schlib(self):
@@ -296,28 +286,15 @@ class SEM(object):
         """
         ## init prior
         prior = self.schema_count.copy().astype(float)
-        ## case existing schema
+        ## active schemas
         if type(self.prev_schema_idx)==int:
             prior[self.prev_schema_idx] += self.lmda
         elif self.prev_schema_idx==None: # tstep0 
             prior[0] = self.alfa
-        ## case new schema
+        ## new/inactive schema 
         prior[-1] = self.alfa
         assert len(prior) == len(self.schlib)
         return np.log(prior)
-
-    def get_active_schema_idx(self,log_prior,log_like):
-        """ 
-        splitting SEM uses argmax of posterior log probability
-        nonsplitting SEM takes single event
-        """
-        if self.nosplit:
-            return 0
-        # edge case first trial
-        if self.prev_schema_idx==None:
-            return 0
-        log_post = log_prior + log_like
-        return np.argmax(log_post)
 
     def calc_likelihood(self,event):
         """ wrapper around schema.calc_like
@@ -332,6 +309,19 @@ class SEM(object):
         log_like = np.sum(log_like,axis=1) # collapse tsteps
         assert len(log_like) == len(self.schlib)
         return log_like
+
+    def get_active_schema_idx(self,log_prior,log_like):
+        """ 
+        splitting SEM uses argmax of posterior log probability
+        nonsplitting SEM takes single event
+        """
+        if self.nosplit:
+            return 0
+        # edge case first trial
+        if self.prev_schema_idx==None:
+            return 0
+        log_post = log_prior + log_like
+        return np.argmax(log_post)
 
     def select_schema(self,log_prior,log_like):
         """ returns index of active schema
@@ -360,7 +350,7 @@ class SEM(object):
         log_like = self.calc_likelihood(event) # (tsteps,schemas)
         self.data.record_trial('like',log_like)
         # select schema and update count
-        active_schema_idx =self.select_schema(log_prior,log_like)
+        active_schema_idx = self.select_schema(log_prior,log_like)
         self.schema_count[active_schema_idx] += len(event)
         active_schema = self.schlib[active_schema_idx]
         self.data.record_trial('active_schema',active_schema_idx)

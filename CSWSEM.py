@@ -248,6 +248,8 @@ class SEM(object):
         """
         # SEMBase.__init__()
         self.seed = seed
+        tr.manual_seed(seed)
+        np.random.seed(seed)
         self.nosplit = nosplit
         # params
         self.lmda = lmda
@@ -383,7 +385,9 @@ class CSWTask():
     """ replicate paper tasks
     """
 
-    def __init__(self):
+    def __init__(self,seed):
+        tr.manual_seed(seed)
+        np.random.seed(seed)
         A1,A2,B1,B2 = self._init_paths()
         self.paths = [[A1,A2],[B1,B2]]
         # keep obs dim fixed: NF plate's formula 

@@ -24,7 +24,7 @@ param_str=`python get_param_jobsub.py ${slurm_arr_idx}`
 echo ${param_str}
 
 # submit job
-srun python PY-sem_batch_exp.py "${param_str}"
+srun python PY-gs-acc.py "${param_str}"
 
 sacct --format="CPUTime,MaxRSS"
 

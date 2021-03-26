@@ -3,7 +3,7 @@
   - look into likelihood computation
     - setup 40 trials of interleaved vs single (blocked)
 - note RNN size: realized that even when RNN size was set to 1, performance on blocked would not exhibit CI, suggesting learning happening in projection layers. to fix this, inputs are projected down to size 3. 
-- refactor argument passing to RNN
+- refactor argument passing to RNN 
     
 
 

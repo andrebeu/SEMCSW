@@ -216,7 +216,9 @@ class SEM(object):
         # hopefully do not need obsdim and stsize
         self.obsdim = OBSDIM
         # collect sem data; locals() returns kwargs dict
-        self.data = SEMData(locals())
+        sem_kwargs = locals()
+        sem_params = {**sem_kwargs,**rnn_kwargs}
+        self.data = SEMData(sem_params)
         """
         schlib always has one "inactive" schema  
          similarly, dimensions of prior,likelihood,posterior
@@ -342,9 +344,7 @@ class CSWTask():
     """ 
     """
 
-    def __init__(self,seed):
-        tr.manual_seed(seed)
-        np.random.seed(seed)
+    def __init__(self   ):
         A1,A2,B1,B2 = self._init_paths()
         self.paths = [[A1,A2],[B1,B2]]
         # keep obs dim fixed: NF plate's formula 

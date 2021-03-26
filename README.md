@@ -1,3 +1,6 @@
+# liketest (03/26/21)
+- look into likelihood computation
+
 # gs2 notes
 - change to gridsearch procedure 
   - single job contains multiple seeds

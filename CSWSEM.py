@@ -3,7 +3,6 @@ import os
 import numpy as np
 import torch as tr
 
-# PDF normal continuous random varaible
 from scipy.stats import norm
 
 
@@ -19,16 +18,14 @@ OBSDIM = 10
 
 class CSWSchema(tr.nn.Module):
 
-    def __init__(self,stsize,seed,learn_rate):
+    def __init__(self,pdim,stsize,learn_rate):
         super().__init__()
         ## network parameters
-        self.stsize = stsize
         self.obsdim = OBSDIM
+        self.pdim = pdim
+        self.stsize = stsize
         self.learn_rate = learn_rate
         # setup
-        self.seed = seed
-        tr.manual_seed(seed)
-        np.random.seed(seed)
         self._build()
         # backprop
         self.lossop = tr.nn.MSELoss()
@@ -42,14 +39,13 @@ class CSWSchema(tr.nn.Module):
         self.var_df0 = 1
         self.var_scale0 = 0.3
         self.sigma = np.ones(self.obsdim)/self.obsdim
-
         return None
 
     def _build(self):
         ## architecture setup
         # embedding handled within
-        self.in_layer = tr.nn.Linear(self.obsdim,self.stsize)
-        self.lstm = tr.nn.LSTM(self.stsize,self.stsize)
+        self.in_layer = tr.nn.Linear(self.obsdim,self.pdim)
+        self.lstm = tr.nn.LSTM(self.pdim,self.stsize)
         self.init_lstm = tr.nn.Parameter(tr.rand(2,1,1,self.stsize),requires_grad=True)
         self.out_layer = tr.nn.Linear(self.stsize,self.obsdim)
         return None
@@ -197,67 +193,28 @@ class CSWSchema(tr.nn.Module):
 
 
 
-class SEMData(object):
-
-    def __init__(self, semparams):
-        self.semparams = semparams
-        self.sem_data = []
-        return None
-
-    def new_trial(self,trial_num):
-        """ 
-        init dict containing trial data 
-        NB** trial_data is first appended to sem_data
-            and is then modified at runtime.
-        """
-        self.trial_data = {'trial':trial_num}
-        self.sem_data.append(self.trial_data) 
-
-    def record_trial(self,key,value):
-        """ populate trial dict 
-        NB** trial_data is a dict that has already been 
-        appended to sem_data. this method modifies self.trial_data 
-        """
-        self.trial_data[key] = value
-
-    def record_exp(self,key,value):
-        """ record experiment wide keyvalue in sem_data """
-        for trial_dict in self.sem_data:
-            trial_dict.update({key:value})
-        return None
-
-    def record_semparams(self):
-        """ update each dict in sem_data
-        to include sem semparams
-        """
-        semparams = {k:v for k,v in self.semparams.items() if k!='self'}
-        for trial_dict in self.sem_data:
-            trial_dict.update(semparams)
-        return None
-
-    def finalize(self):
-        self.record_semparams()
-        return self.sem_data
-
 
 
 class SEM(object):
 
-    def __init__(self, nosplit, stsize, learn_rate, lmda, alfa, seed):
+    def __init__(self, nosplit, lmda, alfa, rnn_kwargs, seed):
         """
         """
-        # SEMBase.__init__()
         self.seed = seed
         tr.manual_seed(seed)
         np.random.seed(seed)
+        ## event RNN
+        self.rnn_kwargs = rnn_kwargs
+        self.stsize = rnn_kwargs['stsize']
+        self.learn_rate = rnn_kwargs['learn_rate']
+        self.pdim = rnn_kwargs['pdim']
+        # SEMBase.__init__()
         self.nosplit = nosplit
         # params
         self.lmda = lmda
         self.alfa = alfa
         # hopefully do not need obsdim and stsize
         self.obsdim = OBSDIM
-        self.stsize = stsize
-        self.learn_rate = learn_rate
         # collect sem data; locals() returns kwargs dict
         self.data = SEMData(locals())
         """
@@ -274,8 +231,8 @@ class SEM(object):
         self.prior = np.array([self.alfa,self.alfa])
         self.schema_count = np.array([0,0])
         self.schlib = [
-            CSWSchema(self.stsize,self.seed,self.learn_rate),
-            CSWSchema(self.stsize,self.seed+101,self.learn_rate)
+            CSWSchema(**self.rnn_kwargs),
+            CSWSchema(**self.rnn_kwargs)
             ] 
         return None
 
@@ -337,7 +294,7 @@ class SEM(object):
         # if new active_schema, update schlib (need to wrap this)
         if active_schema_idx == len(self.schema_count)-1:
             self.schema_count = np.concatenate([self.schema_count,[0]])
-            self.schlib.append(CSWSchema(self.stsize,self.seed,self.learn_rate))
+            self.schlib.append(CSWSchema(**self.rnn_kwargs))
         return active_schema_idx
 
     # run functions
@@ -382,7 +339,7 @@ class SEM(object):
 
 
 class CSWTask():
-    """ replicate paper tasks
+    """ 
     """
 
     def __init__(self,seed):
@@ -506,3 +463,45 @@ class CSWTask():
 
 
 
+
+class SEMData(object):
+
+    def __init__(self, semparams):
+        self.semparams = semparams
+        self.sem_data = []
+        return None
+
+    def new_trial(self,trial_num):
+        """ 
+        init dict containing trial data 
+        NB** trial_data is first appended to sem_data
+            and is then modified at runtime.
+        """
+        self.trial_data = {'trial':trial_num}
+        self.sem_data.append(self.trial_data) 
+
+    def record_trial(self,key,value):
+        """ populate trial dict 
+        NB** trial_data is a dict that has already been 
+        appended to sem_data. this method modifies self.trial_data 
+        """
+        self.trial_data[key] = value
+
+    def record_exp(self,key,value):
+        """ record experiment wide keyvalue in sem_data """
+        for trial_dict in self.sem_data:
+            trial_dict.update({key:value})
+        return None
+
+    def record_semparams(self):
+        """ update each dict in sem_data
+        to include sem semparams
+        """
+        semparams = {k:v for k,v in self.semparams.items() if k!='self'}
+        for trial_dict in self.sem_data:
+            trial_dict.update(semparams)
+        return None
+
+    def finalize(self):
+        self.record_semparams()
+        return self.sem_data

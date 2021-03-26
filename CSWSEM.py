@@ -16,6 +16,152 @@ event_target (len5): Lt,...,Et
 OBSDIM = 10
 
 
+
+class SEM(object):
+
+    def __init__(self, nosplit, lmda, alfa, rnn_kwargs, seed):
+        """
+        """
+        self.seed = seed
+        tr.manual_seed(seed)
+        np.random.seed(seed)
+        ## event RNN
+        self.rnn_kwargs = rnn_kwargs
+        self.stsize = rnn_kwargs['stsize']
+        self.learn_rate = rnn_kwargs['learn_rate']
+        self.pdim = rnn_kwargs['pdim']
+        # SEMBase.__init__()
+        self.nosplit = nosplit
+        # params
+        self.lmda = lmda
+        self.alfa = alfa
+        # hopefully do not need obsdim and stsize
+        self.obsdim = OBSDIM
+        # collect sem data; locals() returns kwargs dict
+        sem_kwargs = locals()
+        sem_params = {**sem_kwargs,**rnn_kwargs}
+        self.data = SEMData(sem_params)
+        """
+        schlib always has one "inactive" schema  
+         similarly, dimensions of prior,likelihood,posterior
+         will be len(schlib) == 1+num_active_schemas
+        """
+        self.active_schema_idx = 0
+        self.prev_schema_idx = None
+        self._init_schlib()
+        return None 
+
+    def _init_schlib(self):
+        self.prior = np.array([self.alfa,self.alfa])
+        self.schema_count = np.array([0,0])
+        self.schlib = [
+            CSWSchema(**self.rnn_kwargs),
+            CSWSchema(**self.rnn_kwargs)
+            ] 
+        return None
+
+    def get_logprior(self):
+        """ 
+        - CRP calculation relies on `schema_count`
+            which is an array that counts number of times (#obs)
+            each schema was used 
+        - len(prior) == len(schlib)
+        """
+        ## init prior
+        prior = self.schema_count.copy().astype(float)
+        ## active schemas
+        if type(self.prev_schema_idx)==int:
+            prior[self.prev_schema_idx] += self.lmda
+        elif self.prev_schema_idx==None: # tstep0 
+            prior[0] = self.alfa
+        ## new/inactive schema 
+        prior[-1] = self.alfa
+        assert len(prior) == len(self.schlib)
+        return np.log(prior)
+
+    def calc_likelihood(self,event):
+        """ wrapper around schema.calc_like
+            - active schemas + one inactive schema
+        """
+        event_len = event.shape[0]
+        num_schemas = len(self.schlib)
+        log_like = -np.ones((num_schemas,event_len))
+        for sch_idx in np.arange(num_schemas):
+            schema = self.schlib[sch_idx]
+            log_like[sch_idx] = schema.calc_loglike(event)
+        log_like = np.sum(log_like,axis=1) # collapse tsteps
+        assert len(log_like) == len(self.schlib)
+        return log_like
+
+    def get_active_schema_idx(self,log_prior,log_like):
+        """ 
+        splitting SEM uses argmax of posterior log probability
+        nonsplitting SEM takes single event
+        """
+        if self.nosplit:
+            return 0
+        # edge case first trial
+        if self.prev_schema_idx==None:
+            return 0
+        log_post = log_prior + log_like
+        return np.argmax(log_post)
+
+    def select_schema(self,log_prior,log_like):
+        """ returns index of active schema
+        updates previous_schema_index
+        if new schema, append to library
+        """
+        # select model
+        active_schema_idx = self.get_active_schema_idx(log_prior,log_like)
+        # update previous schema index
+        self.prev_schema_idx = active_schema_idx
+        # if new active_schema, update schlib (need to wrap this)
+        if active_schema_idx == len(self.schema_count)-1:
+            self.schema_count = np.concatenate([self.schema_count,[0]])
+            self.schlib.append(CSWSchema(**self.rnn_kwargs))
+        return active_schema_idx
+
+    # run functions
+
+    def forward_trial(self, event):
+        """ 
+        wrapper for within trial calculations 
+        records trial data
+        """
+        # prior & likelihood
+        log_prior = self.get_logprior()
+        self.data.record_trial('prior',log_prior)
+        log_like = self.calc_likelihood(event) # (tsteps,schemas)
+        self.data.record_trial('like',log_like)
+        # select schema and update count
+        active_schema_idx = self.select_schema(log_prior,log_like)
+        self.schema_count[active_schema_idx] += len(event)
+        active_schema = self.schlib[active_schema_idx]
+        self.data.record_trial('active_schema',active_schema_idx)
+        # gradient step
+        event_hat = active_schema.forward(event,np=1)
+        self.data.record_trial('event_hat',event_hat)
+        loss = active_schema.backprop(event)
+        self.data.record_trial('loss',loss)
+        return None
+
+    def forward_exp(self,exp,curr):
+        """
+        wrapper for run_trial
+        """
+        # loop over events
+        lossL = []
+        for trial_num,event in enumerate(exp):
+            self.data.new_trial(trial_num)
+            self.data.record_trial('curriculum',curr[trial_num])
+            self.forward_trial(event)
+        # exp recording sem params 
+        # close data
+        exp_data = self.data.finalize()
+        return exp_data
+  
+
+
 class CSWSchema(tr.nn.Module):
 
     def __init__(self,pdim,stsize,learn_rate):
@@ -78,7 +224,7 @@ class CSWSchema(tr.nn.Module):
         """
         event_hat = self.forward(event,np=0)
         event_target = tr.Tensor(event[1:]).unsqueeze(1) 
-        ## update variance
+        ## 
         self.update_variance(event_hat,event_target)
         ## back prop
         loss = 0
@@ -94,7 +240,8 @@ class CSWSchema(tr.nn.Module):
         # update variance
         return loss.detach().numpy()
 
-
+    # like funs
+        
     def calc_loglike_inactive(self,event):
         """ 
         - evaluate likelihood of each scene under normal_pdf
@@ -116,21 +263,22 @@ class CSWSchema(tr.nn.Module):
             and thus changes over time
         - not fully confident with handling of inactive schema 
         """
-        ## case: new inactive schema
+        # print(event.shape, event.shape)
+        ## inactive schema:
         if not self.is_active:
             return self.calc_loglike_inactive(event)
-        ## case: reused schema
-        # calculate probability
-        loglike = 0
+        # like of schema is function of eventPE
         event_hat = self.forward(event,np=1)
         event_target = event[1:] # rm END
         assert event_hat.shape == event_target.shape
-        for scene_target,scene_hat in zip(event_target,event_hat):
-            loglike += self.fast_mvnorm_diagonal_logprob(
-                            scene_target.reshape(-1) - scene_hat.reshape(-1), 
-                        self.sigma)
+        # prob of event is sum of prob of scenes
+        loglike = 0
+        for s_t,s_hat in zip(event_t,event_h):
+            scene_pe = s_t.reshape(-1) - s_hat.reshape(-1)
+            loglike += self.fast_mvnorm_diagonal_logprob(scene_pe, self.sigma)
         return loglike
 
+    
 
     def fast_mvnorm_diagonal_logprob(self, x, variances):
         """
@@ -147,6 +295,7 @@ class CSWSchema(tr.nn.Module):
         log_2pi = np.log(2.0 * np.pi)
         return -0.5 * (log_2pi * np.shape(x)[0] + np.sum(np.log(variances) + (x**2) / variances ))
 
+    # 
     def map_variance(self, samples, nu0, var0):
         """
         This estimator assumes an scaled inverse-chi squared prior over the
@@ -183,6 +332,7 @@ class CSWSchema(tr.nn.Module):
         mode = (nu0 * var0 + n * v) / (nu0 + n + 2)
         return mode
 
+
     def update_variance(self,event_hat,event_target):
         event_hat = event_hat.detach().numpy().squeeze()
         event_target = event_target.detach().numpy().squeeze()
@@ -191,152 +341,6 @@ class CSWSchema(tr.nn.Module):
                         self.var_df0, self.var_scale0)
         return prediction_error
 
-
-
-
-
-class SEM(object):
-
-    def __init__(self, nosplit, lmda, alfa, rnn_kwargs, seed):
-        """
-        """
-        self.seed = seed
-        tr.manual_seed(seed)
-        np.random.seed(seed)
-        ## event RNN
-        self.rnn_kwargs = rnn_kwargs
-        self.stsize = rnn_kwargs['stsize']
-        self.learn_rate = rnn_kwargs['learn_rate']
-        self.pdim = rnn_kwargs['pdim']
-        # SEMBase.__init__()
-        self.nosplit = nosplit
-        # params
-        self.lmda = lmda
-        self.alfa = alfa
-        # hopefully do not need obsdim and stsize
-        self.obsdim = OBSDIM
-        # collect sem data; locals() returns kwargs dict
-        sem_kwargs = locals()
-        sem_params = {**sem_kwargs,**rnn_kwargs}
-        self.data = SEMData(sem_params)
-        """
-        schlib always has one "inactive" schema  
-         similarly, dimensions of prior,likelihood,posterior
-         will be len(schlib) == 1+num_active_schemas
-        """
-        self.active_schema_idx = 0
-        self.prev_schema_idx = None
-        self._init_schlib()
-        return None 
-
-    def _init_schlib(self):
-        self.prior = np.array([self.alfa,self.alfa])
-        self.schema_count = np.array([0,0])
-        self.schlib = [
-            CSWSchema(**self.rnn_kwargs),
-            CSWSchema(**self.rnn_kwargs)
-            ] 
-        return None
-
-    def get_crp_logprior(self):
-        """ 
-        - prior calculation relies on the `schema_count`
-            which is an array that counts number of times (#obs)
-            each schema was used 
-        - len(prior) == len(schlib)
-        """
-        ## init prior
-        prior = self.schema_count.copy().astype(float)
-        ## active schemas
-        if type(self.prev_schema_idx)==int:
-            prior[self.prev_schema_idx] += self.lmda
-        elif self.prev_schema_idx==None: # tstep0 
-            prior[0] = self.alfa
-        ## new/inactive schema 
-        prior[-1] = self.alfa
-        assert len(prior) == len(self.schlib)
-        return np.log(prior)
-
-    def calc_likelihood(self,event):
-        """ wrapper around schema.calc_like
-            - active schemas + one inactive schema
-        """
-        event_len = event.shape[0]
-        num_schemas = len(self.schlib)
-        log_like = -np.ones((num_schemas,event_len))
-        for sch_idx in np.arange(num_schemas):
-            schema = self.schlib[sch_idx]
-            log_like[sch_idx] = schema.calc_loglike(event)
-        log_like = np.sum(log_like,axis=1) # collapse tsteps
-        assert len(log_like) == len(self.schlib)
-        return log_like
-
-    def get_active_schema_idx(self,log_prior,log_like):
-        """ 
-        splitting SEM uses argmax of posterior log probability
-        nonsplitting SEM takes single event
-        """
-        if self.nosplit:
-            return 0
-        # edge case first trial
-        if self.prev_schema_idx==None:
-            return 0
-        log_post = log_prior + log_like
-        return np.argmax(log_post)
-
-    def select_schema(self,log_prior,log_like):
-        """ returns index of active schema
-        updates previous_schema_index
-        if new schema, append to library
-        """
-        # select model
-        active_schema_idx = self.get_active_schema_idx(log_prior,log_like)
-        # update previous schema index
-        self.prev_schema_idx = active_schema_idx
-        # if new active_schema, update schlib (need to wrap this)
-        if active_schema_idx == len(self.schema_count)-1:
-            self.schema_count = np.concatenate([self.schema_count,[0]])
-            self.schlib.append(CSWSchema(**self.rnn_kwargs))
-        return active_schema_idx
-
-    # run functions
-    def forward_trial(self, event):
-        """ 
-        wrapper for within trial calculations 
-        records trial data
-        """
-        # prior & likelihood
-        log_prior = self.get_crp_logprior()
-        self.data.record_trial('prior',log_prior)
-        log_like = self.calc_likelihood(event) # (tsteps,schemas)
-        self.data.record_trial('like',log_like)
-        # select schema and update count
-        active_schema_idx = self.select_schema(log_prior,log_like)
-        self.schema_count[active_schema_idx] += len(event)
-        active_schema = self.schlib[active_schema_idx]
-        self.data.record_trial('active_schema',active_schema_idx)
-        # gradient step
-        event_hat = active_schema.forward(event,np=1)
-        self.data.record_trial('event_hat',event_hat)
-        loss = active_schema.backprop(event)
-        self.data.record_trial('loss',loss)
-        return None
-
-    def forward_exp(self,exp,curr):
-        """
-        wrapper for run_trial
-        """
-        # loop over events
-        lossL = []
-        for trial_num,event in enumerate(exp):
-            self.data.new_trial(trial_num)
-            self.data.record_trial('curriculum',curr[trial_num])
-            self.forward_trial(event)
-        # exp recording sem params 
-        # close data
-        exp_data = self.data.finalize()
-        return exp_data
-  
 
 
 

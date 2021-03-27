@@ -7,6 +7,12 @@
 - made batch_sim and BIexp wrapper funs 
 - gridsearch over pdim and stsize:
   - small B>I results when pdim=4,stsize=5
+- todo:
+  - refactor likelihood 
+  - check effect of:
+    - remove input layer
+    - rnn vs gru vs lstm
+    - update prior count by 1 vs 5
     
 
 

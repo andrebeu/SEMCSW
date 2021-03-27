@@ -337,9 +337,10 @@ class CSWSchema(tr.nn.Module):
         event_hat = event_hat.detach().numpy().squeeze()
         event_target = event_target.detach().numpy().squeeze()
         prediction_error = event_hat - event_target
+        ##
         self.sigma = self.map_variance(prediction_error, 
                         self.var_df0, self.var_scale0)
-        return prediction_error
+        return None
 
 
 

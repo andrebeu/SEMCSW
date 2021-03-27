@@ -241,7 +241,6 @@ class CSWSchema(tr.nn.Module):
         return loss.detach().numpy()
 
     # like funs
-        
     def calc_loglike_inactive(self,event):
         """ 
         - evaluate likelihood of each scene under normal_pdf

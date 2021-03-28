@@ -49,6 +49,7 @@ class SEM(object):
         self.active_schema_idx = 0
         self.prev_schema_idx = None
         self._init_schlib()
+        self.in_layer = tr.nn.Linear(self.obsdim,self.obsdim)
         return None 
 
     def _init_schlib(self):
@@ -60,8 +61,15 @@ class SEM(object):
             ] 
         return None
 
-    def get_logprior(self):
+    def get_logpriors(self):
         """ 
+        3 cases:
+            1) new/inactive schema:
+                prior = alfa
+            2) old schema, active on previous trial:
+                prior = count + lamda
+            3) old schema, not active on previous trial:
+                prior = count
         - CRP calculation relies on `schema_count`
             which is an array that counts number of times (#obs)
             each schema was used 
@@ -79,19 +87,14 @@ class SEM(object):
         assert len(prior) == len(self.schlib)
         return np.log(prior)
 
-    def calc_likelihood(self,event):
+    def get_loglikes(self,event):
         """ wrapper around schema.calc_like
             - active schemas + one inactive schema
         """
-        event_len = event.shape[0]
-        num_schemas = len(self.schlib)
-        log_like = -np.ones((num_schemas,event_len))
-        for sch_idx in np.arange(num_schemas):
-            schema = self.schlib[sch_idx]
-            log_like[sch_idx] = schema.calc_loglike(event)
-        log_like = np.sum(log_like,axis=1) # collapse tsteps
-        assert len(log_like) == len(self.schlib)
-        return log_like
+        loglikes = -99*np.ones(len(self.schlib))
+        for sch_idx,schema in enumerate(self.schlib):
+            loglikes[sch_idx] = schema.calc_event_loglike(event)
+        return loglikes
 
     def get_active_schema_idx(self,log_prior,log_like):
         """ 
@@ -104,6 +107,7 @@ class SEM(object):
         if self.prev_schema_idx==None:
             return 0
         log_post = log_prior + log_like
+        # print(log_prior,log_like,log_post)
         return np.argmax(log_post)
 
     def select_schema(self,log_prior,log_like):
@@ -128,19 +132,23 @@ class SEM(object):
         wrapper for within trial calculations 
         records trial data
         """
-        # prior & likelihood
-        log_prior = self.get_logprior()
-        self.data.record_trial('prior',log_prior)
-        log_like = self.calc_likelihood(event) # (tsteps,schemas)
-        self.data.record_trial('like',log_like)
+        # embed
+        event = tr.Tensor(event).unsqueeze(1) # include batch dim
+        assert event.shape == (6,1,10)
+        # prior & likelihood of each schema
+        log_priors = self.get_logpriors() 
+        log_likes = self.get_loglikes(event) 
+        assert len(log_priors) == len(log_likes) == len(self.schlib)
         # select schema and update count
-        active_schema_idx = self.select_schema(log_prior,log_like)
-        self.schema_count[active_schema_idx] += len(event)
+        active_schema_idx = self.select_schema(log_priors,log_likes)
+        # NB count update
+        self.schema_count[active_schema_idx] += len(event) 
         active_schema = self.schlib[active_schema_idx]
+        #
+        print('sch',active_schema_idx,'\nlpriors',log_priors,'\nllikes',log_likes)
+        #
         self.data.record_trial('active_schema',active_schema_idx)
         # gradient step
-        event_hat = active_schema.forward(event,np=1)
-        self.data.record_trial('event_hat',event_hat)
         loss = active_schema.backprop(event)
         self.data.record_trial('loss',loss)
         return None
@@ -152,6 +160,7 @@ class SEM(object):
         # loop over events
         lossL = []
         for trial_num,event in enumerate(exp):
+            print('\n\nTRIAL',trial_num,'nsc',len(self.schlib))
             self.data.new_trial(trial_num)
             self.data.record_trial('curriculum',curr[trial_num])
             self.forward_trial(event)
@@ -197,43 +206,39 @@ class CSWSchema(tr.nn.Module):
         return None
 
 
-    def forward(self,event,np):
-        ''' main wrapper 
+    def forward(self,event):
+        ''' 
+        receives full event, returns ehat
+            len(event)
+        main wrapper 
         takes event, returns event_hat
         event is [tsteps,scene_dim]
         embed ints
-        np: converts from tr.tensor to np.array
-            also remove batch dim 
         '''
-        event = event[:-1] # remove final scene 
-        event = tr.Tensor(event).unsqueeze(1) # include batch dim
-        tsteps,_,obsdim = event.shape
+        eventx = event[:-1]
         # prop
+        ehat = eventx
         h_lstm,c_lstm = self.init_lstm 
-        event_hat = self.in_layer(event)
-        event_hat,(h_lstm,c_lstm) = self.lstm(event_hat,(h_lstm,c_lstm))
-        event_hat = self.out_layer(event_hat)
+        ehat = self.in_layer(ehat)
+        ehat,(h_lstm,c_lstm) = self.lstm(ehat,(h_lstm,c_lstm))
+        ehat = self.out_layer(ehat)
         # numpy mode for like
-        if np:
-            event_hat = event_hat.squeeze().detach().numpy()
-        return event_hat
+        assert len(ehat) == len(event)-1
+        return ehat
 
     def backprop(self,event):
-        """ update weights and 
-        compute prediction errors
+        """ update weights 
         """
-        event_hat = self.forward(event,np=0)
-        event_target = tr.Tensor(event[1:]).unsqueeze(1) 
+        ehat = self.forward(event)
+        etarget = event[1:]
+        assert ehat.shape == etarget.shape == (5,1,10)
         ## 
-        self.update_variance(event_hat,event_target)
+        self.update_variance(ehat,etarget)
         ## back prop
         loss = 0
         self.optiop.zero_grad()
-        for tstep in range(len(event_hat)):
-            loss += self.lossop(
-                event_hat[tstep],
-                event_target[tstep]
-                )
+        for tstep in range(len(ehat)):
+            loss += self.lossop(ehat[tstep],etarget[tstep])
             loss.backward(retain_graph=True)
         self.optiop.step()
         self.is_active = True
@@ -241,43 +246,46 @@ class CSWSchema(tr.nn.Module):
         return loss.detach().numpy()
 
     # like funs
-    def calc_loglike_inactive(self,event):
+
+    def calc_event_loglike_inactive(self,event):
         """ 
         - evaluate likelihood of each scene under normal_pdf
             summing over components (obsdim)
         - NB currently evaluating Begin,...,4
             i.e. leaveing out end
+        returns int, loglike of entire event
         """
+        eventx = event[:-1]
         assert self.is_active == False
-        event_loglike = 0
-        for scene in event[:-1]: 
+        loglike_event = 0
+        for scene in eventx:
             normal_pdf = norm(0, self.variance_prior_mode ** 0.5)
             scene_loglike = normal_pdf.logpdf(scene).sum()
-            event_loglike += scene_loglike
-        return event_loglike
+            loglike_event += scene_loglike
+        return loglike_event
 
-    def calc_loglike(self,event):
+    def calc_event_loglike(self,event):
         """ 
         NB self.sigma is a function of prediction error 
             and thus changes over time
         - not fully confident with handling of inactive schema 
+        returns int, loglike of entire event
         """
-        # print(event.shape, event.shape)
         ## inactive schema:
-        if not self.is_active:
-            return self.calc_loglike_inactive(event)
+        # if not self.is_active:
+        #     return self.calc_event_loglike_inactive(event)
         # like of schema is function of eventPE
-        event_hat = self.forward(event,np=1)
-        event_target = event[1:] # rm END
-        assert event_hat.shape == event_target.shape
-        # prob of event is sum of prob of scenes
-        loglike = 0
-        for s_t,s_hat in zip(event_t,event_h):
-            scene_pe = s_t.reshape(-1) - s_hat.reshape(-1)
-            loglike += self.fast_mvnorm_diagonal_logprob(scene_pe, self.sigma)
-        return loglike
+        ehat = self.forward(event).detach().numpy() 
+        etarget = event[1:].detach().numpy() # rm BEGIN
+        assert ehat.shape == etarget.shape == (5,1,10) # t,batch,obs
+        event_pes = np.sum([etarget,-ehat],0).squeeze() # t,obs 
+        # loop over scenes of event        
+        loglike_event = 0
+        for scene_pe in event_pes:
+            loglike_event += self.fast_mvnorm_diagonal_logprob(scene_pe, self.sigma)
+        return loglike_event
 
-    
+    # NF misc
 
     def fast_mvnorm_diagonal_logprob(self, x, variances):
         """
@@ -294,7 +302,6 @@ class CSWSchema(tr.nn.Module):
         log_2pi = np.log(2.0 * np.pi)
         return -0.5 * (log_2pi * np.shape(x)[0] + np.sum(np.log(variances) + (x**2) / variances ))
 
-    # 
     def map_variance(self, samples, nu0, var0):
         """
         This estimator assumes an scaled inverse-chi squared prior over the
@@ -331,16 +338,13 @@ class CSWSchema(tr.nn.Module):
         mode = (nu0 * var0 + n * v) / (nu0 + n + 2)
         return mode
 
-
-    def update_variance(self,event_hat,event_target):
-        event_hat = event_hat.detach().numpy().squeeze()
-        event_target = event_target.detach().numpy().squeeze()
-        prediction_error = event_hat - event_target
+    def update_variance(self,ehat,etarget):
+        ehat = ehat.detach().numpy().squeeze()
+        etarget = etarget.detach().numpy().squeeze()
+        PE = ehat - etarget
         ##
-        self.sigma = self.map_variance(prediction_error, 
-                        self.var_df0, self.var_scale0)
+        self.sigma = self.map_variance(PE, self.var_df0, self.var_scale0)
         return None
-
 
 
 
@@ -509,3 +513,7 @@ class SEMData(object):
     def finalize(self):
         self.record_semparams()
         return self.sem_data
+
+
+
+

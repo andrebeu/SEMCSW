@@ -19,9 +19,10 @@ OBSDIM = 10
 
 class SEM(object):
 
-    def __init__(self, nosplit, lmda, alfa, stsize, learn_rate, seed):
+    def __init__(self, nosplit, lmda, alfa, stsize, learn_rate, seed, hand_mode):
         """
         """
+        self.hand_mode = hand_mode
         self.seed = seed
         tr.manual_seed(seed)
         np.random.seed(seed)
@@ -52,12 +53,13 @@ class SEM(object):
 
     def _init_schlib(self):
         self.prior = np.array([self.alfa,self.alfa])
+        nsch = 10
         self.schlib = [
-            CSWSchema(**self.rnn_kwargs),
-            CSWSchema(**self.rnn_kwargs)
+            CSWSchema(**self.rnn_kwargs) for i in range(nsch)            
             ] 
         self.schema_count = np.array([1,0])
         self.active_schema = self.schlib[0]
+        self.prev_schema = self.schlib[0]
         return None
 
     def get_logpriors(self):
@@ -109,7 +111,7 @@ class SEM(object):
         # print(log_prior,log_like,log_post)
         return np.argmax(log_post)
 
-    def select_schema(self,log_prior,log_like):
+    def select_schemaSEM(self,log_prior,log_like):
         """ returns index of active schema
         updates previous_schema_index
         if new schema, append to library
@@ -128,6 +130,22 @@ class SEM(object):
         active_schema = self.schlib[active_schema_idx]
         return active_schema
 
+    def select_schema(self,data=None):
+        if self.hand_mode==0:
+            sch_idx = self.curr[self.trial_num]
+        elif self.hand_mode==1:
+            sch_idx = np.random.randint(len(self.schlib))
+        elif self.hand_mode==2:
+            PE_t=data
+            if self.trial_num < 1:
+                return self.prev_schema
+            if PE_t<self.mPE:
+                return self.prev_schema
+            else:
+                return self.schlib[np.random.randint(len(self.schlib))]
+        active_schema = self.schlib[sch_idx]
+        return active_schema
+
     # run functions
 
     def forward_trial(self, event):
@@ -140,26 +158,31 @@ class SEM(object):
         # embed
         event = tr.Tensor(event).unsqueeze(1) # include batch dim
         assert event.shape == (6,1,10)
+        # prediction error
+        PE_t = self.prev_schema.calc_PE(event)
+        self.active_schema = self.select_schema(PE_t)
+        self.PE_tm1 = PE_t
+        self.mPE += (1/(self.trial_num+1))*PE_t
         # gradient step
         loss = self.active_schema.backprop(event)
         self.data.record_trial('loss',loss)
-        # prior & likelihood of each schema
-        log_priors = self.get_logpriors() 
-        log_likes = self.get_loglikes(event) 
-        assert len(log_priors) == len(log_likes) == len(self.schlib)
-        # update active schema and update count 
-        self.active_schema = self.select_schema(log_priors,log_likes)
+        #
+        self.prev_schema = self.active_schema
+        # 
+        self.event_tm1 = event
         return None
 
     def forward_exp(self,exp,curr):
         """
         wrapper for run_trial
         """
+        self.mPE = 0
+        self.curr = curr
         # loop over events
-        print('active schema of trial t happens at t-1')
         lossL = []
+        self.event_tm1 = tr.Tensor(exp[0]).unsqueeze(1)
         for trial_num,event in enumerate(exp):
-            # print('\n\nTRIAL',trial_num,'nsc',len(self.schlib))
+            self.trial_num = trial_num
             self.data.new_trial(trial_num)
             self.data.record_trial('curriculum',curr[trial_num])
             self.forward_trial(event)
@@ -283,6 +306,15 @@ class CSWSchema(tr.nn.Module):
         for scene_pe in event_pes:
             loglike_event += self.fast_mvnorm_diagonal_logprob(scene_pe, self.sigma)
         return loglike_event
+
+    def calc_PE(self,event):
+        """ calculating PE on every step
+        EDIT: calculate PE on the 2 question steps only 
+        """
+        ehat = self.forward(event).detach().numpy()
+        etarget = event[1:].detach().numpy()
+        PE = np.mean(np.square(etarget[2]-ehat[2])).squeeze()
+        return PE
 
     # NF misc
 

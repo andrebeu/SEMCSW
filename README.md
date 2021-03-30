@@ -1,3 +1,11 @@
+# handSEM 03/30/21
+- hand craft schema selection to different degrees
+- goal: verify intuition that B>I can be explained by poor schema selection
+- sim1: schema selection = curriculum or rand
+  - next step: selection controlled by single parameter "probability of splitting"
+    - sweep "pr_split"
+
+
 # liketest (03/26/21)
 - how to change interleaved without affecting blocked?
   - look into likelihood computation
@@ -15,6 +23,7 @@
     - update prior count by 1 vs 5
     - 
 - result: good BIseparation on early trials when embed_size == stsize = 10 or 15 (lr=0.05)
+- result: when schema for trial t is selected at trial t-1, better deviation at block boundaries but B<I at test. 
 
 
 

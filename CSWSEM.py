@@ -15,31 +15,31 @@ event_target (len5): Lt,...,Et
 ## common across all objects
 OBSDIM = 10
 
-
+    
 
 class SEM(object):
 
-    def __init__(self, nosplit, lmda, alfa, rnn_kwargs, seed):
+    def __init__(self, nosplit, lmda, alfa, embsize, stsize, learn_rate, seed):
         """
         """
         self.seed = seed
         tr.manual_seed(seed)
         np.random.seed(seed)
-        ## event RNN
-        self.rnn_kwargs = rnn_kwargs
-        self.stsize = rnn_kwargs['stsize']
-        self.learn_rate = rnn_kwargs['learn_rate']
-        self.pdim = rnn_kwargs['pdim']
         # SEMBase.__init__()
         self.nosplit = nosplit
         # params
         self.lmda = lmda
         self.alfa = alfa
-        # hopefully do not need obsdim and stsize
         self.obsdim = OBSDIM
+        self.embsize = embsize
+        self.rnn_kwargs = {
+            'stsize':stsize,
+            'learn_rate':learn_rate,
+            'embsize':embsize,
+            }     
         # collect sem data; locals() returns kwargs dict
         sem_kwargs = locals()
-        sem_params = {**sem_kwargs,**rnn_kwargs}
+        sem_params = {**sem_kwargs}
         self.data = SEMData(sem_params)
         """
         schlib always has one "inactive" schema  
@@ -130,25 +130,28 @@ class SEM(object):
     def forward_trial(self, event):
         """ 
         wrapper for within trial calculations 
+            select schema using argmax(posterior)
+            forward and back prop on active schema
         records trial data
         """
         # embed
         event = tr.Tensor(event).unsqueeze(1) # include batch dim
         assert event.shape == (6,1,10)
+        # event = self.embed_event(event)
         # prior & likelihood of each schema
         log_priors = self.get_logpriors() 
         log_likes = self.get_loglikes(event) 
         assert len(log_priors) == len(log_likes) == len(self.schlib)
-        # select schema and update count
+        # select schema and update count 
         active_schema_idx = self.select_schema(log_priors,log_likes)
-        # NB count update
+        self.data.record_trial('active_schema',active_schema_idx)
+        # todo: move count update into select_schema
         self.schema_count[active_schema_idx] += len(event) 
         active_schema = self.schlib[active_schema_idx]
         #
-        print('sch',active_schema_idx,'\nlpriors',log_priors,'\nllikes',log_likes)
+        # print('sch',active_schema_idx,'\nlpriors',log_priors,'\nllikes',log_likes)
         #
-        self.data.record_trial('active_schema',active_schema_idx)
-        # gradient step
+        ## gradient step
         loss = active_schema.backprop(event)
         self.data.record_trial('loss',loss)
         return None
@@ -160,24 +163,24 @@ class SEM(object):
         # loop over events
         lossL = []
         for trial_num,event in enumerate(exp):
-            print('\n\nTRIAL',trial_num,'nsc',len(self.schlib))
+            # print('\n\nTRIAL',trial_num,'nsc',len(self.schlib))
             self.data.new_trial(trial_num)
             self.data.record_trial('curriculum',curr[trial_num])
             self.forward_trial(event)
         # exp recording sem params 
         # close data
         exp_data = self.data.finalize()
-        return exp_data
-  
+        return exp_data  
+
 
 
 class CSWSchema(tr.nn.Module):
 
-    def __init__(self,pdim,stsize,learn_rate):
+    def __init__(self,embsize,stsize,learn_rate):
         super().__init__()
         ## network parameters
         self.obsdim = OBSDIM
-        self.pdim = pdim
+        self.embsize = embsize
         self.stsize = stsize
         self.learn_rate = learn_rate
         # setup
@@ -199,28 +202,30 @@ class CSWSchema(tr.nn.Module):
     def _build(self):
         ## architecture setup
         # embedding handled within
-        self.in_layer = tr.nn.Linear(self.obsdim,self.pdim)
-        self.lstm = tr.nn.LSTM(self.pdim,self.stsize)
+        self.elayer = tr.nn.Linear(self.obsdim,self.embsize)
+        self.lstm = tr.nn.LSTM(self.embsize,self.stsize)
+        self.gru = tr.nn.GRU(self.embsize,self.stsize)
         self.init_lstm = tr.nn.Parameter(tr.rand(2,1,1,self.stsize),requires_grad=True)
         self.out_layer = tr.nn.Linear(self.stsize,self.obsdim)
         return None
 
+    # supervised 
 
     def forward(self,event):
         ''' 
         receives full event, returns ehat
-            len(event)
+            len(event)-1
         main wrapper 
-        takes event, returns event_hat
-        event is [tsteps,scene_dim]
-        embed ints
+        event is Tensor [tsteps,1,scene_dim]
+        returns event_hat
         '''
         eventx = event[:-1]
         # prop
         ehat = eventx
         h_lstm,c_lstm = self.init_lstm 
-        ehat = self.in_layer(ehat)
+        ehat = self.elayer(ehat)
         ehat,(h_lstm,c_lstm) = self.lstm(ehat,(h_lstm,c_lstm))
+        # ehat,hn = self.gru(ehat,h_lstm)
         ehat = self.out_layer(ehat)
         # numpy mode for like
         assert len(ehat) == len(event)-1
@@ -239,7 +244,7 @@ class CSWSchema(tr.nn.Module):
         self.optiop.zero_grad()
         for tstep in range(len(ehat)):
             loss += self.lossop(ehat[tstep],etarget[tstep])
-            loss.backward(retain_graph=True)
+            loss.backward(retain_graph=1)
         self.optiop.step()
         self.is_active = True
         # update variance

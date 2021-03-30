@@ -14,7 +14,7 @@
     - rnn vs gru vs lstm
     - update prior count by 1 vs 5
     - 
-    
+- result: good BIseparation on early trials when embed_size == stsize = 10 or 15 (lr=0.05)
 
 
 

@@ -19,7 +19,7 @@ OBSDIM = 10
 
 class SEM(object):
 
-    def __init__(self, nosplit, lmda, alfa, embsize, stsize, learn_rate, seed):
+    def __init__(self, nosplit, lmda, alfa, stsize, learn_rate, seed):
         """
         """
         self.seed = seed
@@ -31,11 +31,9 @@ class SEM(object):
         self.lmda = lmda
         self.alfa = alfa
         self.obsdim = OBSDIM
-        self.embsize = embsize
         self.rnn_kwargs = {
             'stsize':stsize,
             'learn_rate':learn_rate,
-            'embsize':embsize,
             }     
         # collect sem data; locals() returns kwargs dict
         sem_kwargs = locals()
@@ -137,7 +135,6 @@ class SEM(object):
         # embed
         event = tr.Tensor(event).unsqueeze(1) # include batch dim
         assert event.shape == (6,1,10)
-        # event = self.embed_event(event)
         # prior & likelihood of each schema
         log_priors = self.get_logpriors() 
         log_likes = self.get_loglikes(event) 
@@ -176,11 +173,10 @@ class SEM(object):
 
 class CSWSchema(tr.nn.Module):
 
-    def __init__(self,embsize,stsize,learn_rate):
+    def __init__(self,stsize,learn_rate):
         super().__init__()
         ## network parameters
         self.obsdim = OBSDIM
-        self.embsize = embsize
         self.stsize = stsize
         self.learn_rate = learn_rate
         # setup
@@ -202,9 +198,9 @@ class CSWSchema(tr.nn.Module):
     def _build(self):
         ## architecture setup
         # embedding handled within
-        self.elayer = tr.nn.Linear(self.obsdim,self.embsize)
-        self.lstm = tr.nn.LSTM(self.embsize,self.stsize)
-        self.gru = tr.nn.GRU(self.embsize,self.stsize)
+        self.elayer = tr.nn.Linear(self.obsdim,self.stsize)
+        # self.lstm = tr.nn.LSTM(self.embsize,self.stsize)
+        self.gru = tr.nn.GRU(self.stsize,self.stsize)
         self.init_lstm = tr.nn.Parameter(tr.rand(2,1,1,self.stsize),requires_grad=True)
         self.out_layer = tr.nn.Linear(self.stsize,self.obsdim)
         return None
@@ -224,8 +220,8 @@ class CSWSchema(tr.nn.Module):
         ehat = eventx
         h_lstm,c_lstm = self.init_lstm 
         ehat = self.elayer(ehat)
-        ehat,(h_lstm,c_lstm) = self.lstm(ehat,(h_lstm,c_lstm))
-        # ehat,hn = self.gru(ehat,h_lstm)
+        # ehat,(h_lstm,c_lstm) = self.lstm(ehat,(h_lstm,c_lstm))
+        ehat,hn = self.gru(ehat,h_lstm)
         ehat = self.out_layer(ehat)
         # numpy mode for like
         assert len(ehat) == len(event)-1

@@ -6,15 +6,12 @@ from scipy.stats import norm
 from CSWSEM import *
 
 sem_kwargs={
-  'nosplit':1,
-  'alfa':np.exp(1),
-  'lmda':np.exp(3),
-  'seed':5,
-  'rnn_kwargs': {
-    'stsize':5,
-    'pdim':2,
-    'learn_rate':0.01
-  }
+  'nosplit':0,
+  'alfa':10000000,
+  'lmda':0.1,
+  'seed':np.random.randint(99),
+  'stsize':15,
+  'learn_rate':0.05
 }
 
 

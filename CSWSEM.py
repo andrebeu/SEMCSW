@@ -52,11 +52,12 @@ class SEM(object):
 
     def _init_schlib(self):
         self.prior = np.array([self.alfa,self.alfa])
-        self.schema_count = np.array([0,0])
         self.schlib = [
             CSWSchema(**self.rnn_kwargs),
             CSWSchema(**self.rnn_kwargs)
             ] 
+        self.schema_count = np.array([1,0])
+        self.active_schema = self.schlib[0]
         return None
 
     def get_logpriors(self):
@@ -121,7 +122,11 @@ class SEM(object):
         if active_schema_idx == len(self.schema_count)-1:
             self.schema_count = np.concatenate([self.schema_count,[0]])
             self.schlib.append(CSWSchema(**self.rnn_kwargs))
-        return active_schema_idx
+        self.data.record_trial('active_schema',active_schema_idx)
+        # todo: move count update into select_schema
+        self.schema_count[active_schema_idx] += 5 
+        active_schema = self.schlib[active_schema_idx]
+        return active_schema
 
     # run functions
 
@@ -135,22 +140,15 @@ class SEM(object):
         # embed
         event = tr.Tensor(event).unsqueeze(1) # include batch dim
         assert event.shape == (6,1,10)
+        # gradient step
+        loss = self.active_schema.backprop(event)
+        self.data.record_trial('loss',loss)
         # prior & likelihood of each schema
         log_priors = self.get_logpriors() 
         log_likes = self.get_loglikes(event) 
         assert len(log_priors) == len(log_likes) == len(self.schlib)
-        # select schema and update count 
-        active_schema_idx = self.select_schema(log_priors,log_likes)
-        self.data.record_trial('active_schema',active_schema_idx)
-        # todo: move count update into select_schema
-        self.schema_count[active_schema_idx] += len(event) 
-        active_schema = self.schlib[active_schema_idx]
-        #
-        # print('sch',active_schema_idx,'\nlpriors',log_priors,'\nllikes',log_likes)
-        #
-        ## gradient step
-        loss = active_schema.backprop(event)
-        self.data.record_trial('loss',loss)
+        # update active schema and update count 
+        self.active_schema = self.select_schema(log_priors,log_likes)
         return None
 
     def forward_exp(self,exp,curr):
@@ -158,13 +156,13 @@ class SEM(object):
         wrapper for run_trial
         """
         # loop over events
+        print('active schema of trial t happens at t-1')
         lossL = []
         for trial_num,event in enumerate(exp):
             # print('\n\nTRIAL',trial_num,'nsc',len(self.schlib))
             self.data.new_trial(trial_num)
             self.data.record_trial('curriculum',curr[trial_num])
             self.forward_trial(event)
-        # exp recording sem params 
         # close data
         exp_data = self.data.finalize()
         return exp_data  

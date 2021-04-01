@@ -19,9 +19,10 @@ OBSDIM = 10
 
 class SEM(object):
 
-    def __init__(self, nosplit, lmda, alfa, stsize, learn_rate, seed, hand_mode):
+    def __init__(self, nosplit, lmda, alfa, stsize, learn_rate, seed, hand_mode,PE_thresh=None):
         """
         """
+        self.PE_thresh = PE_thresh
         self.hand_mode = hand_mode
         self.seed = seed
         tr.manual_seed(seed)
@@ -131,18 +132,49 @@ class SEM(object):
         return active_schema
 
     def select_schema(self,data=None):
+        if self.trial_num==0:
+            return self.schlib[0]
         if self.hand_mode==0:
             sch_idx = self.curr[self.trial_num]
         elif self.hand_mode==1:
             sch_idx = np.random.randint(len(self.schlib))
-        elif self.hand_mode==2:
-            PE_t=data
-            if self.trial_num < 1:
-                return self.prev_schema
-            if PE_t<self.mPE:
-                return self.prev_schema
+        # elif self.hand_mode==2:
+        #     self.PE_t = data
+        #     if self.trial_num < 1:
+        #         return self.prev_schema
+        #     if self.PE_t < self.mPE:
+        #         return self.prev_schema
+        #     else:
+        #         return self.schlib[np.random.randint(len(self.schlib))]
+        elif self.hand_mode==3:
+            
+            prevsch_pe = self.schema_tm1.calc_PE(self.event_t)
+            if prevsch_pe < self.mPE:
+                return self.schema_tm1
+            elif np.random.rand(1) > 0.05:
+                PE_L = []
+                for sch in self.schlib:
+                    pe = sch.calc_PE(self.event_t)
+                    PE_L.append(pe)
+                # select schema with lowest PE
+                argmin_schidx = np.argmin(PE_L)
+                return self.schlib[argmin_schidx]
             else:
-                return self.schlib[np.random.randint(len(self.schlib))]
+                return self.schema_tm1
+        ## PE THRESHOLD
+        elif self.hand_mode==4:
+            
+            prevsch_pe = self.schema_tm1.calc_PE(self.event_t)
+            # print(prevsch_pe)
+            if prevsch_pe < self.PE_thresh:
+                return self.schema_tm1
+            else:
+                PE_L = []
+                for sch in self.schlib:
+                    pe = sch.calc_PE(self.event_t)
+                    PE_L.append(pe)
+                return self.schlib[np.argmin(PE_L)]
+
         active_schema = self.schlib[sch_idx]
         return active_schema
 
@@ -158,17 +190,17 @@ class SEM(object):
         # embed
         event = tr.Tensor(event).unsqueeze(1) # include batch dim
         assert event.shape == (6,1,10)
+        self.event_t = event
         # prediction error
-        PE_t = self.prev_schema.calc_PE(event)
-        self.active_schema = self.select_schema(PE_t)
-        self.PE_tm1 = PE_t
-        self.mPE += (1/(self.trial_num+1))*PE_t
+        self.active_schema = self.select_schema()
+        self.PE_t = self.active_schema.calc_PE(self.event_t)
         # gradient step
         loss = self.active_schema.backprop(event)
         self.data.record_trial('loss',loss)
         #
-        self.prev_schema = self.active_schema
-        # 
+        self.mPE += (1/(self.trial_num+1))*self.PE_t
+        self.schema_tm1 = self.active_schema
+        self.PE_tm1 = self.PE_t
         self.event_tm1 = event
         return None
 
@@ -187,6 +219,7 @@ class SEM(object):
             self.data.record_trial('curriculum',curr[trial_num])
             self.forward_trial(event)
         # close data
+        print(self.mPE)
         exp_data = self.data.finalize()
         return exp_data  
 
@@ -313,7 +346,7 @@ class CSWSchema(tr.nn.Module):
         """
         ehat = self.forward(event).detach().numpy()
         etarget = event[1:].detach().numpy()
-        PE = np.mean(np.square(etarget[2]-ehat[2])).squeeze()
+        PE = np.mean(np.square(etarget-ehat)).squeeze()
         return PE
 
     # NF misc

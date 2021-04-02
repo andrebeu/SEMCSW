@@ -22,6 +22,7 @@ class SEM(object):
     def __init__(self, nosplit, lmda, alfa, stsize, learn_rate, seed, mode,PE_thresh=None):
         """
         """
+        self.c_stay = 0
         self.obsdim = OBSDIM
         self.PE_thresh = PE_thresh
         self.mode = mode
@@ -148,23 +149,28 @@ class SEM(object):
         elif self.mode=='Curr':
             self.sidx_t = self.curr[self.trial_num]
         # starting from trial 1, sch_t defined 
-        elif self.mode=='Online':
-            if pe_t <= pe_tm1:
+        elif self.mode=='PEdiff':
+            # print(pe_t - pe_tm1)
+            if pe_t - pe_tm1 <= self.PE_thresh:
+                self.c_stay += 1
                 self.sidx_t = self.sidx_tm1
             else:
+                self.c_stay -= 1
                 self.sidx_t = np.random.randint(self.nsch)
+        elif self.mode=='PEargmin':
+            self.sidx_t = self.get_minPE_sidx()
         self.sidx_tm1 = self.sidx_t
         return self.schlib[self.sidx_t]
 
-    def select_other_schema(self,pe_sch_t):
+    def get_minPE_sidx(self):
+        """ calculate PE 
+        on every schema in lib
+        return argmin
+        """
         PE_L = []
         for sch in self.schlib:
-            pe = sch.calc_PE(self.event_t)
-            PE_L.append(pe)
-        if np.min(PE_L) < self.pe_sch_tm1:
-            return self.schlib[np.argmin(PE_L)]
-        else: 
-            return np.random.choice(self.schlib)
+            PE_L.append(sch.calc_PE(self.event_t))
+        return np.argmin(PE_L)
 
     # run functions
 
@@ -183,7 +189,7 @@ class SEM(object):
         pe_t = self.sch_t.calc_PE(self.event_t)
         pe_tm1 = self.sch_t.calc_PE(self.event_tm1)
         self.sch_t = self.select_schema(pe_t,pe_tm1)
-        # gradient step
+        # calc acc and take gradient step
         loss = self.sch_t.backprop(event)
         self.data.record_trial('loss',loss)
         # previous event and schema
@@ -206,7 +212,7 @@ class SEM(object):
             self.data.record_trial('curriculum',curr[trial_num])
             self.forward_trial(event)
         # close data
-        print(self.mPE)
+        print(self.c_stay)
         exp_data = self.data.finalize()
         return exp_data  
 

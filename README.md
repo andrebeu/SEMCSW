@@ -1,9 +1,18 @@
-# handSEM 03/30/21
-- hand craft schema selection to different degrees
+# handSEM 03/30/21: PE based schema selection 
 - goal: verify intuition that B>I can be explained by poor schema selection
-- sim1: schema selection = curriculum or rand
-  - next step: selection controlled by single parameter "probability of splitting"
-    - sweep "pr_split"
+- control sim: random schema selection: B&I both around chance
+- control sim: schema selection == curriculum: B&I both high acc
+  - but note small diff early trials where B>I b/c only training 1 sch
+- splitting rule based on PE magnitude:
+  - i.e. if PE > PEthreshold, select new schema 
+  - small range of PEthreshold where tiny effect test B>I
+  - tried 2 "new schema selection" rules:
+    - random and argmin
+- splitting rule based on PE(t) - PE(t-1)
+  - if PE(t)-PE(t-1)>thresh, select new schema
+    - select new schema: rand vs PEargmin
+  - first condition to show I acc remain low
+  - however, B acc is also low
 
 
 # liketest (03/26/21)

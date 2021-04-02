@@ -47,7 +47,7 @@ class SEM(object):
          similarly, dimensions of prior,likelihood,posterior
          will be len(schlib) == 1+num_active_schemas
         """
-        self.active_schema_idx = 0
+        self.sch_t_idx = 0
         self.prev_schema_idx = None
         self._init_schlib()
         self.in_layer = tr.nn.Linear(self.obsdim,self.obsdim)
@@ -60,7 +60,7 @@ class SEM(object):
             CSWSchema(**self.rnn_kwargs) for i in range(self.nsch)            
             ] 
         self.schema_count = np.array([1,0])
-        self.active_schema = self.schlib[0]
+        self.sch_t = self.schlib[0]
         self.prev_schema = self.schlib[0]
         return None
 
@@ -132,31 +132,39 @@ class SEM(object):
         active_schema = self.schlib[active_schema_idx]
         return active_schema
 
-    def select_schema(self,data=None):
+    def select_schema(self,pe_t,pe_tm1):
+        """ 
+        this operation happens before a response is issued
+        in the trial, schema_t refers to schema active on 
+        previous trial 
+        """
+        # print('p',pe_t-pe_tm1)
+        # boundary
         if self.trial_num == 0:
-            return self.schlib[0]
-        if self.mode=='Rand':
-            sch_idx = np.random.randint(self.nsch)
-            return self.schlib[sch_idx]
+            self.sidx_t = 0 
+        # control conditions
+        elif self.mode=='Rand':
+            self.sidx_t = np.random.randint(self.nsch)
         elif self.mode=='Curr':
-            sch_idx = self.curr[self.trial_num]
-            return self.schlib[sch_idx]
-        # prev sch if below thresh; existing sch if better than prev; else fork
-        elif self.mode==5:
-            prevsch_pe = self.schema_tm1.calc_PE(self.event_t)
-            # print(prevsch_pe)
-            if prevsch_pe < self.PE_thresh:
-                return self.schema_tm1
+            self.sidx_t = self.curr[self.trial_num]
+        # starting from trial 1, sch_t defined 
+        elif self.mode=='Online':
+            if pe_t <= pe_tm1:
+                self.sidx_t = self.sidx_tm1
             else:
-                PE_L = []
-                for sch in self.schlib:
-                    pe = sch.calc_PE(self.event_t)
-                    PE_L.append(pe)
-                if np.min(PE_L) < prevsch_pe:
-                    return self.schlib[np.argmin(PE_L)]
-                else: 
-                    return np.random.choice(self.schlib)
-        assert False
+                self.sidx_t = np.random.randint(self.nsch)
+        self.sidx_tm1 = self.sidx_t
+        return self.schlib[self.sidx_t]
+
+    def select_other_schema(self,pe_sch_t):
+        PE_L = []
+        for sch in self.schlib:
+            pe = sch.calc_PE(self.event_t)
+            PE_L.append(pe)
+        if np.min(PE_L) < self.pe_sch_tm1:
+            return self.schlib[np.argmin(PE_L)]
+        else: 
+            return np.random.choice(self.schlib)
 
     # run functions
 
@@ -172,16 +180,14 @@ class SEM(object):
         assert event.shape == (6,1,OBSDIM)
         self.event_t = event
         # prediction error
-        self.active_schema = self.select_schema()
-        self.PE_t = self.active_schema.calc_PE(self.event_t)
+        pe_t = self.sch_t.calc_PE(self.event_t)
+        pe_tm1 = self.sch_t.calc_PE(self.event_tm1)
+        self.sch_t = self.select_schema(pe_t,pe_tm1)
         # gradient step
-        loss = self.active_schema.backprop(event)
+        loss = self.sch_t.backprop(event)
         self.data.record_trial('loss',loss)
-        #
-        self.mPE += (1/(self.trial_num+1))*self.PE_t
-        self.schema_tm1 = self.active_schema
-        self.PE_tm1 = self.PE_t
-        self.event_tm1 = event
+        # previous event and schema
+        self.event_tm1 = self.event_t
         return None
 
     def forward_exp(self,exp,curr):
@@ -194,6 +200,7 @@ class SEM(object):
         lossL = []
         self.event_tm1 = tr.Tensor(exp[0]).unsqueeze(1)
         for trial_num,event in enumerate(exp):
+            # print('t',trial_num)
             self.trial_num = trial_num
             self.data.new_trial(trial_num)
             self.data.record_trial('curriculum',curr[trial_num])

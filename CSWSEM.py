@@ -19,11 +19,12 @@ OBSDIM = 10
 
 class SEM(object):
 
-    def __init__(self, nosplit, lmda, alfa, stsize, learn_rate, seed, hand_mode,PE_thresh=None):
+    def __init__(self, nosplit, lmda, alfa, stsize, learn_rate, seed, mode,PE_thresh=None):
         """
         """
+        self.obsdim = OBSDIM
         self.PE_thresh = PE_thresh
-        self.hand_mode = hand_mode
+        self.mode = mode
         self.seed = seed
         tr.manual_seed(seed)
         np.random.seed(seed)
@@ -32,7 +33,7 @@ class SEM(object):
         # params
         self.lmda = lmda
         self.alfa = alfa
-        self.obsdim = OBSDIM
+        # self.obsdim = OBSDIM
         self.rnn_kwargs = {
             'stsize':stsize,
             'learn_rate':learn_rate,
@@ -54,9 +55,9 @@ class SEM(object):
 
     def _init_schlib(self):
         self.prior = np.array([self.alfa,self.alfa])
-        nsch = 10
+        self.nsch = 20
         self.schlib = [
-            CSWSchema(**self.rnn_kwargs) for i in range(nsch)            
+            CSWSchema(**self.rnn_kwargs) for i in range(self.nsch)            
             ] 
         self.schema_count = np.array([1,0])
         self.active_schema = self.schlib[0]
@@ -132,38 +133,16 @@ class SEM(object):
         return active_schema
 
     def select_schema(self,data=None):
-        if self.trial_num==0:
+        if self.trial_num == 0:
             return self.schlib[0]
-        if self.hand_mode==0:
+        if self.mode=='Rand':
+            sch_idx = np.random.randint(self.nsch)
+            return self.schlib[sch_idx]
+        elif self.mode=='Curr':
             sch_idx = self.curr[self.trial_num]
-        elif self.hand_mode==1:
-            sch_idx = np.random.randint(len(self.schlib))
-        # elif self.hand_mode==2:
-        #     self.PE_t = data
-        #     if self.trial_num < 1:
-        #         return self.prev_schema
-        #     if self.PE_t < self.mPE:
-        #         return self.prev_schema
-        #     else:
-        #         return self.schlib[np.random.randint(len(self.schlib))]
-        elif self.hand_mode==3:
-            
-            prevsch_pe = self.schema_tm1.calc_PE(self.event_t)
-            if prevsch_pe < self.mPE:
-                return self.schema_tm1
-            elif np.random.rand(1) > 0.05:
-                PE_L = []
-                for sch in self.schlib:
-                    pe = sch.calc_PE(self.event_t)
-                    PE_L.append(pe)
-                # select schema with lowest PE
-                argmin_schidx = np.argmin(PE_L)
-                return self.schlib[argmin_schidx]
-            else:
-                return self.schema_tm1
-        ## PE THRESHOLD
-        elif self.hand_mode==4:
-            
+            return self.schlib[sch_idx]
+        # prev sch if below thresh; existing sch if better than prev; else fork
+        elif self.mode==5:
             prevsch_pe = self.schema_tm1.calc_PE(self.event_t)
             # print(prevsch_pe)
             if prevsch_pe < self.PE_thresh:
@@ -173,10 +152,11 @@ class SEM(object):
                 for sch in self.schlib:
                     pe = sch.calc_PE(self.event_t)
                     PE_L.append(pe)
-                return self.schlib[np.argmin(PE_L)]
-
-        active_schema = self.schlib[sch_idx]
-        return active_schema
+                if np.min(PE_L) < prevsch_pe:
+                    return self.schlib[np.argmin(PE_L)]
+                else: 
+                    return np.random.choice(self.schlib)
+        assert False
 
     # run functions
 
@@ -189,7 +169,7 @@ class SEM(object):
         """
         # embed
         event = tr.Tensor(event).unsqueeze(1) # include batch dim
-        assert event.shape == (6,1,10)
+        assert event.shape == (6,1,OBSDIM)
         self.event_t = event
         # prediction error
         self.active_schema = self.select_schema()
@@ -286,7 +266,7 @@ class CSWSchema(tr.nn.Module):
         """
         ehat = self.forward(event)
         etarget = event[1:]
-        assert ehat.shape == etarget.shape == (5,1,10)
+        assert ehat.shape == etarget.shape == (5,1,OBSDIM)
         ## 
         self.update_variance(ehat,etarget)
         ## back prop
@@ -346,7 +326,7 @@ class CSWSchema(tr.nn.Module):
         """
         ehat = self.forward(event).detach().numpy()
         etarget = event[1:].detach().numpy()
-        PE = np.mean(np.square(etarget-ehat)).squeeze()
+        PE = np.mean(np.square(etarget[2:4]-ehat[2:4])).squeeze()
         return PE
 
     # NF misc
@@ -416,7 +396,7 @@ class CSWTask():
     """ 
     """
 
-    def __init__(self   ):
+    def __init__(self):
         A1,A2,B1,B2 = self._init_paths()
         self.paths = [[A1,A2],[B1,B2]]
         # keep obs dim fixed: NF plate's formula 

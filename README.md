@@ -1,3 +1,9 @@
+# discrete 04/03/21: discrete networks
+- assumption: learning on one state does not affect others
+- architecture: embed -> recurrent -> softmax
+ 
+
+
 # handSEM 03/30/21: PE based schema selection 
 - goal: verify intuition that B>I can be explained by poor schema selection
 - control sim: random schema selection: B&I both around chance
